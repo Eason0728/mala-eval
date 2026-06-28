@@ -2,6 +2,13 @@
 
 計時同仁「態度 30 分」評鑑網頁 App：同仁匿名互評 → 自動算態度分 → 主管調整 → 查時薪。架構已預留職能 70 分擴充。
 
+## 正式網址（已上線）
+
+- **同仁互評（公開匿名）**：https://eason0728.github.io/mala-eval/
+- **主管／管理頁（需通行碼）**：https://eason0728.github.io/mala-eval/admin.html
+- 程式碼 repo：https://github.com/Eason0728/mala-eval
+- 後端資料：Google Sheet（含「設定」分頁，可改名單／題目／時薪／通行碼）
+
 - 前端：GitHub Pages 靜態頁（`index.html` 互評、`admin.html` 管理）
 - 後端：Google Apps Script Web App（`apps-script/Code.gs`）
 - 資料庫：Google Sheet
