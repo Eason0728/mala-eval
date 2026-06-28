@@ -28,7 +28,8 @@ function setupSheet() {
   // 2) 設定分頁內容
   cfg.clear();
   cfg.getRange('A1').setValue('季度');      cfg.getRange('B1').setValue('2026-Q1');
-  cfg.getRange('A2').setValue('通行碼');    cfg.getRange('B2').setValue('0000'); // ← 部署後請改掉
+  cfg.getRange('A2').setValue('通行碼');
+  cfg.getRange('B2').setNumberFormat('@').setValue('mala2026'); // 文字格式，避免數字被去前導零；← 部署後請改掉
 
   cfg.getRange('A4').setValue('受評同仁名單');
   const ratees = ['許雅筑', '王鈺屏', '楊磬瑋', '林宸妤', '徐佑昕', '王禹婕'];
