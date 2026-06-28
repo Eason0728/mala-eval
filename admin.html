@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>評鑑管理</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <h1>評鑑管理</h1>
+    <div id="gate" class="card">
+      <label>通行碼 <input id="pass" type="password" /></label>
+      <button id="enter">進入</button>
+      <div id="gateErr" class="msg err" style="display:none">通行碼錯誤</div>
+    </div>
+    <div id="panel" style="display:none">
+      <div id="progress" class="card"></div>
+      <div id="overview" class="card"></div>
+      <div id="detail" class="card"></div>
+    </div>
+  </div>
+  <script type="module" src="js/admin-page.js"></script>
+</body>
+</html>
