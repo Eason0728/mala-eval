@@ -1,20 +1,15 @@
 // 唯一計分來源：純函式，無 DOM／無網路。前端與 Node 測試共用。
 
-// 同一位受評者的多筆互評（每筆長度 6）→ 每項平均（長度 6）；無互評回 null。
-export function averageItemScores(scoresList) {
-  if (!scoresList || scoresList.length === 0) return null;
-  const n = scoresList[0].length;
-  const sums = new Array(n).fill(0);
-  for (const scores of scoresList) {
-    for (let i = 0; i < n; i++) sums[i] += scores[i];
-  }
-  return sums.map((s) => s / scoresList.length);
+// 單一評核者對某題組各題分數的總分；空回 null。
+export function raterTotal(scores) {
+  if (!scores || scores.length === 0) return null;
+  return scores.reduce((a, b) => a + b, 0);
 }
 
-// 六項平均加總（0..30）；輸入 null 回 null。
-export function attitudeScore(itemAverages) {
-  if (itemAverages === null) return null;
-  return itemAverages.reduce((a, b) => a + b, 0);
+// 多位評核者總分取平均；空回 null。
+export function averageTotals(totalsList) {
+  if (!totalsList || totalsList.length === 0) return null;
+  return totalsList.reduce((a, b) => a + b, 0) / totalsList.length;
 }
 
 // 四捨五入到小數 1 位。
@@ -22,47 +17,36 @@ export function round1(n) {
   return Math.round(n * 10) / 10;
 }
 
-// 最終小計：態度 null → null；職能 null（第一階段）→ 只計態度；皆有 → 相加。
-export function finalSubtotal({ attitude, attitudeAdjust = 0, competency = null, competencyAdjust = 0 }) {
+// 實際分數：態度 null → null；表現 null → 只計態度；皆有 → 相加。皆含 ± 調整。
+export function finalScore({ attitude, attitudeAdjust = 0, performance = null, performanceAdjust = 0 }) {
   if (attitude === null || attitude === undefined) {
-    return { subtotal: null, competencyCounted: false };
+    return { score: null, performanceCounted: false };
   }
   const attitudePart = attitude + attitudeAdjust;
-  if (competency === null || competency === undefined) {
-    return { subtotal: attitudePart, competencyCounted: false };
+  if (performance === null || performance === undefined) {
+    return { score: attitudePart, performanceCounted: false };
   }
-  return { subtotal: attitudePart + competency + competencyAdjust, competencyCounted: true };
+  return { score: attitudePart + performance + performanceAdjust, performanceCounted: true };
 }
 
-// 時薪查表：null→資料不足；命中 band→ok；表外→需人工確認。
-export function lookupWage(total, wageTable) {
-  if (total === null || total === undefined) return { status: 'insufficient' };
-  for (const band of wageTable) {
-    if (total >= band.min && total <= band.max) return { status: 'ok', wage: band.wage };
-  }
-  return { status: 'manual' };
-}
-
-// 組合單一同仁的完整評鑑結果。
-export function aggregateRatee({ ratee, scoresList, adjustment = {}, wageTable }) {
-  const itemAverages = averageItemScores(scoresList);
-  const attitude = attitudeScore(itemAverages);
+// 組合單一受評者完整結果。計時表現=正職互評平均；正職表現=主管單一評分。
+export function aggregateRatee({
+  ratee, role, attitudeTotals = [], performanceTotals = [], supervisorPerf = null, adjustment = {},
+}) {
+  const attitude = averageTotals(attitudeTotals);
+  const performance = role === '正職' ? supervisorPerf : averageTotals(performanceTotals);
   const attitudeAdjust = adjustment.attitudeAdjust ?? 0;
-  const competency = adjustment.competency ?? null;
-  const competencyAdjust = adjustment.competencyAdjust ?? 0;
-  const { subtotal, competencyCounted } = finalSubtotal({
-    attitude, attitudeAdjust, competency, competencyAdjust,
+  const performanceAdjust = adjustment.performanceAdjust ?? 0;
+  const { score, performanceCounted } = finalScore({
+    attitude, attitudeAdjust, performance, performanceAdjust,
   });
   return {
-    ratee,
-    responseCount: scoresList ? scoresList.length : 0,
-    itemAverages,
-    attitude,
-    attitudeAdjust,
-    competency,
-    competencyAdjust,
-    subtotal,
-    competencyCounted,
-    wage: lookupWage(subtotal, wageTable),
+    ratee, role,
+    attitude, attitudeAdjust,
+    performance, performanceAdjust,
+    performanceCounted,
+    finalScore: score,
+    attitudeCount: attitudeTotals.length,
+    performanceCount: role === '正職' ? (supervisorPerf === null ? 0 : 1) : performanceTotals.length,
   };
 }
