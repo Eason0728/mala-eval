@@ -9,15 +9,39 @@
 <body>
   <div class="wrap">
     <h1 id="title">計時同仁評鑑</h1>
-    <p>誠實面對、客觀檢視。每項點選星等，星等說明可展開參考。匿名填寫，謝謝你的回饋 ⭐️</p>
-    <div id="forms"></div>
-    <div class="card">
-      <label>整體備註（選填）<br /><textarea id="note" rows="2" style="width:100%"></textarea></label>
+
+    <!-- 同仁互評區（預設顯示） -->
+    <div id="evalSection">
+      <p>誠實面對、客觀檢視。每項點選星等，星等說明可展開參考。匿名填寫，謝謝你的回饋 ⭐️</p>
+      <div id="forms"></div>
+      <div class="card">
+        <label>整體備註（選填）<br /><textarea id="note" rows="2" style="width:100%"></textarea></label>
+      </div>
+      <div id="errors" class="msg err" style="display:none"></div>
+      <button id="submit">送出評鑑</button>
+      <div id="result" class="msg" style="display:none"></div>
     </div>
-    <div id="errors" class="msg err" style="display:none"></div>
-    <button id="submit">送出評鑑</button>
-    <div id="result" class="msg" style="display:none"></div>
+
+    <!-- 主管登入入口（低調） -->
+    <div style="text-align:center; margin:28px 0 8px">
+      <a href="#" id="adminEntry" class="muted">主管登入</a>
+    </div>
+
+    <!-- 管理區（預設隱藏，點主管登入才出現） -->
+    <div id="adminSection" style="display:none">
+      <div id="gate" class="card">
+        <label>通行碼 <input id="pass" type="password" /></label>
+        <button id="enter">進入</button>
+        <div id="gateErr" class="msg err" style="display:none">通行碼錯誤</div>
+      </div>
+      <div id="panel" style="display:none">
+        <div id="progress" class="card"></div>
+        <div id="overview" class="card"></div>
+        <div id="detail" class="card"></div>
+      </div>
+    </div>
   </div>
   <script type="module" src="js/eval-page.js"></script>
+  <script type="module" src="js/admin-page.js"></script>
 </body>
 </html>

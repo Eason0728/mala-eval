@@ -4,8 +4,9 @@
 
 ## 正式網址（已上線）
 
-- **同仁互評（公開匿名）**：https://eason0728.github.io/mala-eval/
-- **主管／管理頁（需通行碼）**：https://eason0728.github.io/mala-eval/admin.html
+- **同仁互評 ＋ 主管管理（同一頁）**：https://eason0728.github.io/mala-eval/
+  - 同仁進來直接填互評；主管點頁面底部「主管登入」輸入通行碼即進管理區。
+  - （舊網址 `admin.html` 會自動轉址到首頁。）
 - 程式碼 repo：https://github.com/Eason0728/mala-eval
 - 後端資料：Google Sheet（含「設定」分頁，可改名單／題目／時薪／通行碼）
 

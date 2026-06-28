@@ -97,6 +97,17 @@ async function reload() {
   renderOverview(rows);
 }
 
+const adminEntry = document.getElementById('adminEntry');
+if (adminEntry) {
+  adminEntry.onclick = (e) => {
+    e.preventDefault();
+    document.getElementById('adminSection').style.display = 'block';
+    adminEntry.style.display = 'none';
+    document.getElementById('pass').focus();
+    document.getElementById('adminSection').scrollIntoView({ behavior: 'smooth' });
+  };
+}
+
 document.getElementById('enter').onclick = async () => {
   PASS = document.getElementById('pass').value;
   try {

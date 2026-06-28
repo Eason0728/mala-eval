@@ -59,7 +59,7 @@ async function init() {
     return;
   }
   if (localStorage.getItem(storageKey(state.config.quarter))) {
-    document.querySelector('.wrap').innerHTML =
+    document.getElementById('evalSection').innerHTML =
       '<div class="msg ok">這個裝置本季已完成評鑑，謝謝你！</div>';
     return;
   }
