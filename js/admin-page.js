@@ -63,7 +63,7 @@ function renderDetail(ratee) {
     const cur = sp ? sp.scores : new Array(items.length).fill(0);
     perfBlock = `<div class="card"><b>主管評：正職表現</b><br>
       ${items.map((it, i) => `<div>${it.label}
-        <select data-perf="${i}">${[1, 2, 3, 4, 5].map((v) =>
+        <select data-perf="${i}"><option value="0" disabled ${cur[i] ? '' : 'selected'}>—</option>${[1, 2, 3, 4, 5].map((v) =>
           `<option value="${v}" ${cur[i] === v ? 'selected' : ''}>${v}★</option>`).join('')}</select>
       </div>`).join('')}
       <button id="savePerf">儲存表現評分</button> <span id="perfMsg" class="muted"></span></div>`;
@@ -85,6 +85,7 @@ function renderDetail(ratee) {
     document.getElementById('savePerf').onclick = async () => {
       const scores = [...document.querySelectorAll('[data-perf]')].map((s) => Number(s.value));
       const msg = document.getElementById('perfMsg');
+      if (scores.some((v) => !v)) { msg.textContent = '請為每一項評分'; return; }
       try {
         const res = await submitSupervisorPerf({ type: 'supervisorPerf', passcode: PASS, quarter: CURRENT_Q, ratee, scores });
         if (!res.ok) throw new Error();
