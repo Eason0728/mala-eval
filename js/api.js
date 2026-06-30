@@ -16,7 +16,11 @@ export async function fetchConfig() {
   return res.json();
 }
 
+export function login(account, password) {
+  return postJSON({ type: 'login', account, password });
+}
 export function submitPeer(payload) { return postJSON(payload); }
+export function submitSupervisorPerf(payload) { return postJSON(payload); }
 export function submitAdjust(payload) { return postJSON(payload); }
 
 export async function fetchAdminData(passcode, quarter) {

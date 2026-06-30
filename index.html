@@ -12,14 +12,26 @@
 
     <!-- 同仁互評區（預設顯示） -->
     <div id="evalSection">
-      <p>誠實面對、客觀檢視。每項點選星等，星等說明可展開參考。匿名填寫，謝謝你的回饋 ⭐️</p>
-      <div id="forms"></div>
-      <div class="card">
-        <label>整體備註（選填）<br /><textarea id="note" rows="2" style="width:100%"></textarea></label>
+      <!-- 登入閘 -->
+      <div id="loginGate" class="card">
+        <p>請先登入再進行評鑑 🔑</p>
+        <label>帳號 <input id="acc" autocomplete="username" /></label><br /><br />
+        <label>密碼 <input id="pw" type="password" autocomplete="current-password" /></label>
+        <button id="loginBtn">登入</button>
+        <div id="loginErr" class="msg err" style="display:none"></div>
       </div>
-      <div id="errors" class="msg err" style="display:none"></div>
-      <button id="submit">送出評鑑</button>
-      <div id="result" class="msg" style="display:none"></div>
+      <!-- 評鑑表單（登入後顯示） -->
+      <div id="evalForm" style="display:none">
+        <p id="hello" class="muted"></p>
+        <p>誠實面對、客觀檢視。每項點選星等，星等說明可展開參考。謝謝你的回饋 ⭐️</p>
+        <div id="forms"></div>
+        <div class="card">
+          <label>整體備註（選填）<br /><textarea id="note" rows="2" style="width:100%"></textarea></label>
+        </div>
+        <div id="errors" class="msg err" style="display:none"></div>
+        <button id="submit">送出評鑑</button>
+        <div id="result" class="msg" style="display:none"></div>
+      </div>
     </div>
 
     <!-- 主管登入入口（低調） -->
