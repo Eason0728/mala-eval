@@ -205,3 +205,35 @@ function doPost(e) {
     lock.releaseLock();
   }
 }
+
+// ====== 一次性：從 repo 讀四組題庫寫入設定分頁（動態排版，不動帳號/通行碼）======
+// 需要 UrlFetch 授權；資料檔在 repo（public）：data/banks-<季度>.json
+function seedBanksFromRepo() {
+  const url = 'https://raw.githubusercontent.com/Eason0728/mala-eval/main/data/banks-2026Q1.json';
+  const BANKS = JSON.parse(UrlFetchApp.fetch(url, { muteHttpExceptions: true }).getContentText());
+  const order = [
+    ['CFG_pt_attitude', '計時態度題', BANKS.pt_attitude || []],
+    ['CFG_pt_perf', '計時表現題', BANKS.pt_perf || []],
+    ['CFG_ft_attitude', '正職態度題', BANKS.ft_attitude || []],
+    ['CFG_ft_perf', '正職表現題（待 KPI 模組，暫空）', BANKS.ft_perf || []],
+  ];
+  const book = SpreadsheetApp.getActiveSpreadsheet();
+  const cfg = book.getSheetByName('設定');
+  cfg.getRange('A5:G400').clearContent();
+  book.getNamedRanges().forEach((nr) => {
+    if (['CFG_pt_attitude', 'CFG_pt_perf', 'CFG_ft_attitude', 'CFG_ft_perf'].indexOf(nr.getName()) >= 0) nr.remove();
+  });
+  const header = ['key', '題目', '5星', '4星', '3星', '2星', '1星'];
+  let r = 5;
+  order.forEach((blk) => {
+    const name = blk[0], title = blk[1], rows = blk[2];
+    cfg.getRange(r, 1).setValue(title);
+    cfg.getRange(r + 1, 1, 1, 7).setValues([header]);
+    const list = rows.length ? rows : [['', '', '', '', '', '', '']];
+    cfg.getRange(r + 2, 1, list.length, 7).setValues(list);
+    book.setNamedRange(name, cfg.getRange(r + 2, 1, list.length, 7));
+    r = r + 2 + list.length + 1;
+  });
+  return '題庫寫入完成：計時態度 ' + (BANKS.pt_attitude || []).length + '、計時表現 ' + (BANKS.pt_perf || []).length
+    + '、正職態度 ' + (BANKS.ft_attitude || []).length + '、正職表現 ' + (BANKS.ft_perf || []).length + '（待做）';
+}
