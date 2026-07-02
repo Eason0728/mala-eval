@@ -22,6 +22,9 @@ export function login(account, password) {
 export function myScores(account, password) {
   return postJSON({ type: 'myScores', account, password });
 }
+export function changePassword(account, oldPassword, newPassword) {
+  return postJSON({ type: 'changePassword', account, oldPassword, newPassword });
+}
 export function submitPeer(payload) { return postJSON(payload); }
 export function submitSupervisorPerf(payload) { return postJSON(payload); }
 export function submitAdjust(payload) { return postJSON(payload); }

@@ -1,4 +1,4 @@
-import { login, fetchConfig, submitPeer, myScores } from './api.js';
+import { login, fetchConfig, submitPeer, myScores, changePassword } from './api.js';
 import { validatePeerSubmission } from './validate.js';
 import { averageItems, round1 } from './scoring.js';
 
@@ -320,6 +320,29 @@ document.getElementById('loginBtn').onclick = async () => {
 
 document.getElementById('btnFill').onclick = () => switchTab('fill');
 document.getElementById('btnMyScores').onclick = () => switchTab('scores');
+
+document.getElementById('savePw').onclick = async () => {
+  const msg = document.getElementById('pwMsg');
+  const pw = document.getElementById('newPw').value;
+  const pw2 = document.getElementById('newPw2').value;
+  if (!pw || pw.length < 4) { msg.className = 'msg err'; msg.textContent = '新密碼至少 4 碼'; return; }
+  if (pw !== pw2) { msg.className = 'msg err'; msg.textContent = '兩次輸入不一致'; return; }
+  const btn = document.getElementById('savePw');
+  btn.disabled = true; msg.className = 'muted'; msg.textContent = '儲存中…';
+  try {
+    const res = await changePassword(state.auth.account, state.auth.password, pw);
+    if (res.ok) {
+      state.auth.password = pw; // 之後查成績仍可用
+      document.getElementById('newPw').value = '';
+      document.getElementById('newPw2').value = '';
+      msg.className = 'msg ok'; msg.textContent = '密碼已更新';
+    } else {
+      msg.className = 'msg err';
+      msg.textContent = res.reason === 'tooshort' ? '新密碼至少 4 碼' : '更新失敗，請重試';
+    }
+  } catch { msg.className = 'msg err'; msg.textContent = '連線失敗，請稍後再試'; }
+  btn.disabled = false;
+};
 
 document.getElementById('submit').onclick = async () => {
   if (!state.fillQuarter) return;

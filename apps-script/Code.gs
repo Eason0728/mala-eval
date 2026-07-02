@@ -208,6 +208,7 @@ function doPost(e) {
   try {
     const p = JSON.parse(e.postData.contents);
     if (p.type === 'login') return jsonOut(handleLogin(p));
+    if (p.type === 'changePassword') return jsonOut(handleChangePassword(p));
     if (p.type === 'myScores') return jsonOut(handleMyScores(p));
     if (p.type === 'peer') return jsonOut(handlePeer(p));
     if (p.type === 'supervisorPerf') return jsonOut(handleSupervisorPerf(p));
@@ -272,6 +273,23 @@ function readResultDetail(name) {
     }
   }
   return out;
+}
+
+// p: { type:'changePassword', account, oldPassword, newPassword } → 同仁改自己密碼
+function handleChangePassword(p) {
+  if (!p.newPassword || String(p.newPassword).length < 4) return { ok: false, reason: 'tooshort' };
+  const sh = ss().getSheetByName('帳號');
+  const v = sh.getDataRange().getValues();
+  for (let i = 1; i < v.length; i++) {
+    if (String(v[i][2]) === String(p.account)) {
+      if (String(v[i][3]) !== String(p.oldPassword)) return { ok: false, reason: 'wrong' };
+      const cell = sh.getRange(i + 1, 4);
+      cell.setNumberFormat('@'); // 文字格式，保留前導零
+      cell.setValue(String(p.newPassword));
+      return { ok: true };
+    }
+  }
+  return { ok: false, reason: 'notfound' };
 }
 
 // p: { type:'myScores', account, password } → 只回傳本人的資料
