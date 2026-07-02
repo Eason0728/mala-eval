@@ -290,6 +290,12 @@ function switchTab(which) {
 }
 
 async function init() {
+  // 登入欄位預設空白，避免瀏覽器自動帶入存過的帳密
+  const clr = () => {
+    const a = document.getElementById('acc'); const p = document.getElementById('pw');
+    if (a) a.value = ''; if (p) p.value = '';
+  };
+  clr(); setTimeout(clr, 300);
   try {
     state.config = await fetchConfig();
   } catch {
