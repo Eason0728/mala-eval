@@ -46,18 +46,20 @@ function fillAdminSelectors() {
 }
 
 function buildRows() {
-  const { config, peerRecords, supervisorPerf, adjustments, results } = DATA;
+  const { config, peerRecords, supervisorPerf, adjustments, results, selfRecords } = DATA;
   const adjBy = new Map(adjustments.map((a) => [a.ratee, a]));
   const spBy = new Map(supervisorPerf.map((s) => [s.ratee, raterTotal(s.scores)]));
-  const attMap = new Map(); // ratee -> 每位評核者的態度總分[]
+  const attMap = new Map(); // ratee -> 每位評核者的態度總分[]（含自評）
   const perfMap = new Map();
   config.accounts.forEach((a) => { attMap.set(a.name, []); perfMap.set(a.name, []); });
-  peerRecords.forEach((r) => {
+  const addTotal = (r) => {
     const t = raterTotal(r.scores);
     if (t === null) return;
     if (r.category === '態度' && attMap.has(r.ratee)) attMap.get(r.ratee).push(t);
     if (r.category === '表現' && perfMap.has(r.ratee)) perfMap.get(r.ratee).push(t);
-  });
+  };
+  peerRecords.forEach(addTotal);
+  (selfRecords || []).forEach(addTotal); // 自評算進正式平均
   // 手動填的成績（結果細項，如第一季）：每人每類別加總
   const seedAtt = new Map(); const seedPerf = new Map();
   (results || []).forEach((r) => {
@@ -98,6 +100,15 @@ function renderProgress(rows) {
     `<b>${CURRENT_Q}</b>　態度有分 ${attP} 人、表現有分 ${perfP} 人`;
 }
 
+function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function renderCompany() {
+  const msgs = (DATA && DATA.companyMessages) || [];
+  const host = document.getElementById('companyMsgs');
+  if (!host) return;
+  host.style.display = msgs.length ? '' : 'none';
+  host.innerHTML = msgs.length ? `<b>💬 對公司的話（匿名）</b>${msgs.map((m) => `<div class="msgbubble">${esc(m)}</div>`).join('')}` : '';
+}
+
 function renderOverview(rows) {
   const head = '<tr><th>同仁</th><th>角色</th><th>態度分</th><th>態度±</th><th>表現分</th><th>表現±</th><th>實際分數</th><th>態度份數</th><th>表現份數</th></tr>';
   const body = rows.map((r) => `<tr>
@@ -130,9 +141,15 @@ function renderDetail(ratee) {
       </div>`).join('')}
       <button id="savePerf">儲存表現評分</button> <span id="perfMsg" class="muted"></span></div>`;
   }
+  const selfAtt = (DATA.selfRecords || []).find((s) => s.ratee === ratee && s.category === '態度');
+  const selfPerf = (DATA.selfRecords || []).find((s) => s.ratee === ratee && s.category === '表現');
+  const selfLine = (selfAtt || selfPerf)
+    ? `<div class="muted">自評：態度 ${selfAtt ? round1(raterTotal(selfAtt.scores)) : '—'}｜表現 ${selfPerf ? round1(raterTotal(selfPerf.scores)) : '—'}（已含進上方實際分數）</div>`
+    : '<div class="muted">自評：尚未填</div>';
   document.getElementById('detail').innerHTML = `
     <b>${ratee}（${row.role}） 明細</b>
     <div>態度分 ${numText(row.attitude)}｜表現分 ${row.performance === null ? '未計' : numText(row.performance)}｜實際分數 ${numText(row.finalScore)}</div>
+    ${selfLine}
     ${perfBlock}
     <div class="card">
       <div>主管 ± 調整</div>
@@ -177,6 +194,7 @@ async function reload() {
   const rows = buildRows();
   renderProgress(rows);
   renderOverview(rows);
+  renderCompany();
 }
 
 const adminEntry = document.getElementById('adminEntry');
@@ -203,6 +221,7 @@ document.getElementById('enter').onclick = async () => {
     const rows = buildRows();
     renderProgress(rows);
     renderOverview(rows);
+    renderCompany();
   } catch {
     document.getElementById('gateErr').style.display = 'block';
     document.getElementById('gateErr').textContent = '連線失敗，請稍後再試';

@@ -1,11 +1,10 @@
-import { login, fetchConfig, submitPeer, myScores, changePassword } from './api.js';
+import { login, fetchConfig, submitPeer, submitSelf, myScores, changePassword } from './api.js';
 import { validatePeerSubmission } from './validate.js';
 import { averageItems, round1 } from './scoring.js';
 
-const state = { me: null, auth: null, config: null, ratings: new Map(), fillQuarter: null };
+const state = { me: null, auth: null, config: null, ratings: new Map(), fillQuarter: null, self: null, selfQuarter: null };
 
 // ===== 季度鎖定與開放時間 =====
-// 1月填上年Q4、4月填Q1、7月填Q2、10月填Q3。
 function fillTarget(d = new Date()) {
   const m = d.getMonth() + 1;
   const y = d.getFullYear();
@@ -38,7 +37,33 @@ function bankFor(role, kind) {
   return kind === 'attitude' ? b.ftAttitude : b.ftPerf;
 }
 
-// ===== 填寫表單 =====
+// 開場白用的季度：優先填寫季度，否則剛結束的上一季
+function introQuarter() {
+  const t = fillTarget();
+  if (t) return { year: t.year, q: t.q };
+  const d = new Date();
+  let y = d.getFullYear();
+  let q = Math.floor(d.getMonth() / 3) + 1 - 1;
+  if (q < 1) { q = 4; y -= 1; }
+  return { year: y, q };
+}
+function renderIntro() {
+  const { year, q } = introQuarter();
+  const mrange = { 1: '1 月到 3 月', 2: '4 月到 6 月', 3: '7 月到 9 月', 4: '10 月到 12 月' }[q];
+  const nextQ = QLABEL[(q % 4) + 1];
+  document.getElementById('introBody').innerHTML = `
+    <p>各位夥伴：</p>
+    <p>先說聲謝謝。</p>
+    <p>${year} 年的${QLABEL[q]}，每一個忙到不可開交的用餐時段、每一次臨時補位、每一句「我來就好」，都是大家一起撐起來的。這三個月，辛苦了。</p>
+    <p>這份表單，是想邀請大家一起回顧 ${mrange}的自己，還有身邊的夥伴。</p>
+    <p><b>【填寫前，想跟大家說三件事】</b></p>
+    <p><b>1. 請放心誠實</b><br />每個星級都有具體的行為描述，照你實際看到的表現給分就好。誠實的回饋不是挑毛病，而是幫夥伴看見自己看不到的地方——這是同事之間最實在的幫忙。</p>
+    <p><b>2. 也給自己一點時間</b><br />評自己的時候，不用客氣，也不用苛刻。這三個月有進步的地方，給自己一個大大的掌聲；還卡卡的地方，寫下來，當作給三個月後的自己一個期許。</p>
+    <p><b>3. 分數怎麼用，跟大家說清楚</b><br />「態度評分」佔總分的 30%，加上「職能專業」的 70%，就是${nextQ}的時薪標準。我們希望薪水不是黑箱——每一分都有依據，做得好，就看得到。</p>
+    <p>大家認真填的每一格，我們都會認真看。<br />期待透過這次的真實回饋，讓團隊更有默契、更有溫度。</p>
+    <p>謝謝大家，有你們真好！</p>`;
+}
+
 function renderStars(values, idx, item) {
   const wrap = document.createElement('div');
   wrap.className = 'item';
@@ -62,15 +87,18 @@ function renderStars(values, idx, item) {
   wrap.append(title, stars, help);
   return wrap;
 }
-function catBlock(label, items, values) {
+function catBlock(label, items, values, open) {
   const d = document.createElement('details');
   d.className = 'cat';
+  if (open) d.open = true;
   const sum = document.createElement('summary');
   sum.textContent = label;
   d.appendChild(sum);
   items.forEach((it, i) => d.appendChild(renderStars(values, i, it)));
   return d;
 }
+
+// ===== 他評（填寫評鑑）=====
 function rateeCard(r) {
   const attitudeItems = bankFor(r.role, 'attitude');
   const showPerf = r.role === '計時' && state.me.role === '正職';
@@ -107,25 +135,77 @@ function renderForms() {
     host.appendChild(sec);
   });
 }
-
 function renderFill() {
   const t = fillTarget();
   const open = isFillOpen() && t;
   const banner = document.getElementById('fillBanner');
-  const showFill = ['fillHint', 'forms', 'submit'];
+  const showIds = ['fillHint', 'forms', 'submit'];
   if (!open) {
     state.fillQuarter = null;
     banner.className = 'card msg err';
     banner.textContent = `目前非填寫期間。開放時間為每年 1、4、7、10 月的 1～5 號，下次開放：${nextOpenText()}。`;
-    showFill.forEach((id) => { document.getElementById(id).style.display = 'none'; });
+    showIds.forEach((id) => { document.getElementById(id).style.display = 'none'; });
     document.getElementById('result').style.display = 'none';
     return;
   }
   state.fillQuarter = t.quarter;
   banner.className = 'card';
   banner.innerHTML = `<b>填寫季度：${t.year} 年 ${QLABEL[t.q]}</b>`;
-  showFill.forEach((id) => { document.getElementById(id).style.display = ''; });
+  showIds.forEach((id) => { document.getElementById(id).style.display = ''; });
   renderForms();
+}
+
+// ===== 自評 =====
+function renderSelf() {
+  const t = fillTarget();
+  const open = isFillOpen() && t;
+  const banner = document.getElementById('selfBanner');
+  const showIds = ['selfHint', 'selfForms', 'selfMsgs', 'selfSubmit'];
+  if (!open) {
+    state.selfQuarter = null;
+    banner.className = 'card msg err';
+    banner.textContent = `目前非填寫期間。開放時間為每年 1、4、7、10 月的 1～5 號，下次開放：${nextOpenText()}。`;
+    showIds.forEach((id) => { document.getElementById(id).style.display = 'none'; });
+    document.getElementById('selfResult').style.display = 'none';
+    return;
+  }
+  state.selfQuarter = t.quarter;
+  banner.className = 'card';
+  banner.innerHTML = `<b>自評季度：${t.year} 年 ${QLABEL[t.q]}</b>`;
+  showIds.forEach((id) => { document.getElementById(id).style.display = ''; });
+  const host = document.getElementById('selfForms');
+  host.innerHTML = '';
+  const attItems = bankFor(state.me.role, 'attitude');
+  const perfItems = state.me.role === '計時' ? bankFor('計時', 'perf') : [];
+  state.self = {
+    attitude: new Array(attItems.length).fill(0),
+    performance: perfItems.length ? new Array(perfItems.length).fill(0) : null,
+  };
+  host.appendChild(catBlock('職能態度（自評）', attItems, state.self.attitude, true));
+  if (perfItems.length) host.appendChild(catBlock('職能表現（自評）', perfItems, state.self.performance, true));
+  // 留言欄
+  document.getElementById('selfNote').value = '';
+  document.getElementById('companyNote').value = '';
+  document.getElementById('peerMsgs').innerHTML = '';
+  addPeerRow();
+}
+
+function peerOptions() {
+  return state.config.accounts.filter((a) => a.name !== state.me.name)
+    .map((a) => `<option value="${a.name}">${a.name}（${a.role}）</option>`).join('');
+}
+function addPeerRow() {
+  const host = document.getElementById('peerMsgs');
+  const n = host.children.length + 1;
+  const row = document.createElement('div');
+  row.className = 'peermsg';
+  row.innerHTML = `<div class="muted">夥伴${n}</div>
+    <select class="peer-to"><option value="">選擇夥伴…</option>${peerOptions()}</select>
+    <textarea class="peer-msg" rows="1" placeholder="想說的話…" style="width:100%"></textarea>`;
+  host.appendChild(row);
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
 function showResult(cls, text) {
@@ -134,56 +214,77 @@ function showResult(cls, text) {
   box.className = `msg ${cls}`;
   box.textContent = text;
 }
+function showSelfResult(cls, text) {
+  const box = document.getElementById('selfResult');
+  box.style.display = 'block';
+  box.className = `msg ${cls}`;
+  box.textContent = text;
+}
 
 // ===== 我的成績 =====
-// 把某季某類別的細項分數（label→score）整理出來
-function itemsFor(quarterData, category) { return quarterData[category] || null; }
-
 function buildMyQuarters(data) {
   const role = data.role;
-  const byQuarter = {}; // quarter -> { 態度:[{label,score}], 表現:[{label,score}] }
+  const byQuarter = {};
   const ensure = (q) => (byQuarter[q] = byQuarter[q] || {});
 
-  // 1) 手動填的（結果細項），優先
+  // 手動填的歷史成績（結果細項）：官方值，不拆自評/他評
   (data.seeded || []).forEach((row) => {
     const q = ensure(row.quarter);
-    (q[row.category] = q[row.category] || []).push({ label: row.label, score: row.score });
+    const key = row.category === '態度' ? 'att' : 'perf';
+    (q[key] = q[key] || []).push({ label: row.label, score: row.score });
   });
 
-  // 2) 從評分紀錄計算（沒有手動資料的季度才用）
-  const recByQC = {}; // quarter -> {態度:[scores[]], 表現:[scores[]]}
+  const recByQC = {};
   (data.records || []).forEach((r) => {
     recByQC[r.quarter] = recByQC[r.quarter] || {};
     (recByQC[r.quarter][r.category] = recByQC[r.quarter][r.category] || []).push(r.scores);
   });
-  Object.keys(recByQC).forEach((q) => {
+  const selfByQC = {};
+  (data.self || []).forEach((r) => { selfByQC[r.quarter] = selfByQC[r.quarter] || {}; selfByQC[r.quarter][r.category] = r.scores; });
+  const spByQ = {};
+  (data.supervisorPerf || []).forEach((sp) => { spByQ[sp.quarter] = sp.scores; });
+
+  const quarters = new Set([].concat(Object.keys(recByQC), Object.keys(selfByQC), Object.keys(spByQ)));
+  quarters.forEach((q) => {
     const qd = ensure(q);
-    if (!qd['態度']) {
-      const avg = averageItems(recByQC[q]['態度']);
-      if (avg) qd['態度'] = bankFor(role, 'attitude').map((it, i) => ({ label: it.label, score: avg[i] }));
+    if (qd.att) return; // 已有手動填的官方值 → 不再計算
+    const attBank = bankFor(role, 'attitude');
+    const peerAtt = (recByQC[q] && recByQC[q]['態度']) || [];
+    const selfAtt = selfByQC[q] && selfByQC[q]['態度'];
+    if (peerAtt.length || selfAtt) {
+      const off = averageItems(selfAtt ? peerAtt.concat([selfAtt]) : peerAtt);
+      qd.att = attBank.map((it, i) => ({ label: it.label, score: off[i] }));
+      if (peerAtt.length) { const pa = averageItems(peerAtt); qd.attPeer = attBank.map((it, i) => ({ label: it.label, score: pa[i] })); }
+      if (selfAtt) qd.attSelf = attBank.map((it, i) => ({ label: it.label, score: selfAtt[i] }));
     }
-    if (!qd['表現'] && role === '計時') {
-      const avg = averageItems(recByQC[q]['表現']);
-      if (avg) qd['表現'] = bankFor('計時', 'perf').map((it, i) => ({ label: it.label, score: avg[i] }));
+    if (role === '計時') {
+      const perfBank = bankFor('計時', 'perf');
+      const peerPerf = (recByQC[q] && recByQC[q]['表現']) || [];
+      const selfPerf = selfByQC[q] && selfByQC[q]['表現'];
+      if (peerPerf.length || selfPerf) {
+        const off = averageItems(selfPerf ? peerPerf.concat([selfPerf]) : peerPerf);
+        qd.perf = perfBank.map((it, i) => ({ label: it.label, score: off[i] }));
+        if (peerPerf.length) { const pp = averageItems(peerPerf); qd.perfPeer = perfBank.map((it, i) => ({ label: it.label, score: pp[i] })); }
+        if (selfPerf) qd.perfSelf = perfBank.map((it, i) => ({ label: it.label, score: selfPerf[i] }));
+      }
+    } else if (spByQ[q] && spByQ[q].length) {
+      const perfBank = bankFor('正職', 'perf');
+      qd.perf = perfBank.map((it, i) => ({ label: it.label, score: spByQ[q][i] }));
     }
   });
-  // 3) 正職表現：主管評分
-  if (role === '正職') {
-    (data.supervisorPerf || []).forEach((sp) => {
-      const qd = ensure(sp.quarter);
-      if (!qd['表現'] && sp.scores.length) {
-        qd['表現'] = bankFor('正職', 'perf').map((it, i) => ({ label: it.label, score: sp.scores[i] }));
-      }
-    });
-  }
   return byQuarter;
 }
 
 function sumItems(items) { return items ? items.reduce((a, b) => a + b.score, 0) : null; }
 function numText(n) { return n === null || n === undefined ? '—' : round1(n); }
+function diffText(cur, prev) {
+  if (prev === null || prev === undefined || cur === null || cur === undefined) return '—';
+  const d = round1(cur - prev);
+  return d > 0 ? `▲+${d}` : d < 0 ? `▼${d}` : '＝';
+}
 
-// 兩條線（上季 vs 當季）的細項折線圖
-function lineChart(labels, prev, cur, prevQ, curQ, yMax) {
+// 兩條線折線圖（name1 灰、name2 紅）
+function lineChart(labels, s1, s2, name1, name2, yMax) {
   const W = Math.max(560, labels.length * 46);
   const H = 260;
   const padL = 34; const padR = 12; const padT = 30; const padB = 64;
@@ -199,10 +300,20 @@ function lineChart(labels, prev, cur, prevQ, curQ, yMax) {
   const xticks = labels.map((_, i) => `<text x="${x(i)}" y="${H - padB + 16}" font-size="10" fill="#666" text-anchor="middle">${i + 1}</text>`).join('');
   return `<div class="chartwrap"><svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
     ${grid}${xticks}
-    <line class="c-prev" x1="${padL}" y1="${H - 22}" x2="${padL + 24}" y2="${H - 22}" stroke-width="2"/><text x="${padL + 30}" y="${H - 18}" font-size="12">上季（${prevQ ? qLabel(prevQ) : '—'}）</text>
-    <line class="c-cur" x1="${padL + 150}" y1="${H - 22}" x2="${padL + 174}" y2="${H - 22}" stroke-width="2"/><text x="${padL + 180}" y="${H - 18}" font-size="12">當季（${qLabel(curQ)}）</text>
-    ${poly(prev, 'c-prev')}${poly(cur, 'c-cur')}
+    <line class="c-prev" x1="${padL}" y1="${H - 22}" x2="${padL + 24}" y2="${H - 22}" stroke-width="2"/><text x="${padL + 30}" y="${H - 18}" font-size="12">${name1}</text>
+    <line class="c-cur" x1="${padL + 160}" y1="${H - 22}" x2="${padL + 184}" y2="${H - 22}" stroke-width="2"/><text x="${padL + 190}" y="${H - 18}" font-size="12">${name2}</text>
+    ${poly(s1, 'c-prev')}${poly(s2, 'c-cur')}
   </svg></div>`;
+}
+
+function compareBlock(title, labels, series1, series2, name1, name2) {
+  const s1 = labels.map((lb) => { const f = series1.find((x) => x.label === lb); return f ? f.score : null; });
+  const s2 = labels.map((lb) => { const f = series2.find((x) => x.label === lb); return f ? f.score : null; });
+  const yMax = Math.max(5, Math.ceil(Math.max.apply(null, s1.concat(s2).filter((v) => v !== null).concat([5]))));
+  const chart = lineChart(labels, s1.every((v) => v !== null) ? s1 : null, s2, name1, name2, yMax);
+  const rows = labels.map((lb, i) => `<tr><td style="text-align:left">${i + 1}. ${lb}</td><td>${numText(s2[i])}</td><td>${numText(s1[i])}</td><td>${diffText(s2[i], s1[i])}</td></tr>`).join('');
+  return `<div class="card"><b>${title}</b>${chart}
+    <table><tr><th>項目</th><th>${name2}</th><th>${name1}</th><th>差</th></tr>${rows}</table></div>`;
 }
 
 async function renderScores() {
@@ -216,7 +327,6 @@ async function renderScores() {
   const byQuarter = buildMyQuarters(data);
   let quarters = Object.keys(byQuarter).sort((a, b) => qSortKey(a) - qSortKey(b));
 
-  // 本季（正在填寫的季度）成績要 10 號後才開放查詢
   const t = fillTarget();
   const now = new Date();
   let pendingNote = '';
@@ -224,73 +334,58 @@ async function renderScores() {
     quarters = quarters.filter((q) => q !== t.quarter);
     pendingNote = `<div class="msg">📌 ${qLabel(t.quarter)} 的成績於 ${t.fillMonth} 月 10 號後開放查詢。</div>`;
   }
+  const bubbles = (arr) => arr.map((m) => `<div class="msgbubble">${escapeHtml(m.msg)}</div>`).join('');
+  let msgBlock = '';
+  if (data.messagesToMe && data.messagesToMe.length) msgBlock += `<div class="card"><b>💬 夥伴對你說的話（匿名）</b>${bubbles(data.messagesToMe)}</div>`;
+  if (data.myNotes && data.myNotes.length) msgBlock += `<div class="card"><b>💌 你寫給自己的話</b>${bubbles(data.myNotes)}</div>`;
 
   if (!quarters.length) {
-    pane.innerHTML = `${pendingNote}<div class="msg">目前尚無可查詢的成績。</div>`;
+    pane.innerHTML = `${pendingNote}${msgBlock}<div class="msg">目前尚無可查詢的成績。</div>`;
     return;
   }
 
-  // 小計表
   const rows = quarters.map((q, i) => {
-    const att = sumItems(byQuarter[q]['態度']);
-    const perf = sumItems(byQuarter[q]['表現']);
+    const att = sumItems(byQuarter[q].att);
+    const perf = sumItems(byQuarter[q].perf);
     const total = att === null ? null : att + (perf === null ? 0 : perf);
-    const prevTotal = i > 0 ? (() => { const p = quarters[i - 1]; const a = sumItems(byQuarter[p]['態度']); const pf = sumItems(byQuarter[p]['表現']); return a === null ? null : a + (pf === null ? 0 : pf); })() : null;
-    let diff = '—';
-    if (prevTotal !== null && total !== null) {
-      const d = round1(total - prevTotal);
-      diff = d > 0 ? `▲+${d}` : d < 0 ? `▼${d}` : '＝';
-    }
-    return `<tr><td>${qLabel(q)}</td><td>${numText(att)}</td><td>${perf === null ? '未計' : numText(perf)}</td><td><b>${numText(total)}</b></td><td>${diff}</td></tr>`;
+    let prevTotal = null;
+    if (i > 0) { const p = quarters[i - 1]; const a = sumItems(byQuarter[p].att); const pf = sumItems(byQuarter[p].perf); prevTotal = a === null ? null : a + (pf === null ? 0 : pf); }
+    return `<tr><td>${qLabel(q)}</td><td>${numText(att)}</td><td>${perf === null ? '未計' : numText(perf)}</td><td><b>${numText(total)}</b></td><td>${diffText(total, prevTotal)}</td></tr>`;
   }).join('');
-  const table = `<b>各季小計</b><table><tr><th>季度</th><th>職能態度總分</th><th>職能表現總分</th><th>實際分數</th><th>與上季</th></tr>${rows}</table>`;
+  const table = `<div class="card"><b>各季小計</b>（實際分數已含自評）<table><tr><th>季度</th><th>職能態度總分</th><th>職能表現總分</th><th>實際分數</th><th>與上季</th></tr>${rows}</table></div>`;
 
-  // 細項折線圖：當季 vs 上季
   const curQ = quarters[quarters.length - 1];
   const prevQ = quarters.length >= 2 ? quarters[quarters.length - 2] : null;
-  const catList = (q) => [...(byQuarter[q]['態度'] || []), ...(byQuarter[q]['表現'] || [])];
-  const curItems = catList(curQ);
-  const labels = curItems.map((x) => x.label);
-  const curVals = curItems.map((x) => x.score);
-  const prevVals = prevQ ? labels.map((lb) => {
-    const found = catList(prevQ).find((x) => x.label === lb);
-    return found ? found.score : null;
-  }) : null;
-  const allVals = curVals.concat(prevVals ? prevVals.filter((v) => v !== null) : []);
-  const yMax = Math.max(5, Math.ceil(Math.max.apply(null, allVals.length ? allVals : [5])));
-  const chart = `<b>細項分數：當季 vs 上季</b>${lineChart(labels, prevVals && prevVals.every((v) => v !== null) ? prevVals : null, curVals, prevQ, curQ, yMax)}`;
+  const catList = (q, kind) => [...(byQuarter[q][kind] || [])];
+  const official = (q) => [...catList(q, 'att'), ...catList(q, 'perf')];
 
-  // 細項對照表（含項目名稱）
-  const itemRows = labels.map((lb, i) => {
-    const cv = curVals[i];
-    const pv = prevVals ? prevVals[i] : null;
-    let d = '—';
-    if (pv !== null && pv !== undefined) {
-      const dd = round1(cv - pv);
-      d = dd > 0 ? `▲+${dd}` : dd < 0 ? `▼${dd}` : '＝';
-    }
-    return `<tr><td style="text-align:left">${i + 1}. ${lb}</td><td>${pv === null || pv === undefined ? '—' : round1(pv)}</td><td>${round1(cv)}</td><td>${d}</td></tr>`;
-  }).join('');
-  const itemTable = `<b>細項對照</b><table><tr><th>項目</th><th>上季</th><th>當季</th><th>變化</th></tr>${itemRows}</table>`;
+  // 當季 vs 上季（官方值）
+  const trend = compareBlock(`細項分數：當季 vs 上季`, official(curQ).map((x) => x.label),
+    prevQ ? official(prevQ) : [], official(curQ), prevQ ? qLabel(prevQ) : '上季', `當季（${qLabel(curQ)}）`);
 
-  pane.innerHTML = pendingNote
-    + `<div class="card">${table}</div>`
-    + `<div class="card">${chart}</div>`
-    + `<div class="card">${itemTable}</div>`;
+  // 自評 vs 他評（當季）
+  let selfCompare = '';
+  const selfItems = [...catList(curQ, 'attSelf'), ...catList(curQ, 'perfSelf')];
+  if (selfItems.length) {
+    const peerItems = [...catList(curQ, 'attPeer'), ...catList(curQ, 'perfPeer')];
+    selfCompare = compareBlock(`自評 vs 他評（${qLabel(curQ)}）`, selfItems.map((x) => x.label), peerItems, selfItems, '他評', '自評');
+  }
+
+  pane.innerHTML = pendingNote + msgBlock + table + selfCompare + trend;
 }
 
 // ===== 分頁切換 =====
 function switchTab(which) {
-  const fill = which === 'fill';
-  document.getElementById('fillPane').style.display = fill ? '' : 'none';
-  document.getElementById('scorePane').style.display = fill ? 'none' : '';
-  document.getElementById('btnFill').classList.toggle('active', fill);
-  document.getElementById('btnMyScores').classList.toggle('active', !fill);
-  if (!fill) renderScores();
+  document.getElementById('fillPane').style.display = which === 'fill' ? '' : 'none';
+  document.getElementById('selfPane').style.display = which === 'self' ? '' : 'none';
+  document.getElementById('scorePane').style.display = which === 'scores' ? '' : 'none';
+  document.getElementById('btnFill').classList.toggle('active', which === 'fill');
+  document.getElementById('btnSelf').classList.toggle('active', which === 'self');
+  document.getElementById('btnMyScores').classList.toggle('active', which === 'scores');
+  if (which === 'scores') renderScores();
 }
 
 async function init() {
-  // 登入欄位預設空白，避免瀏覽器自動帶入存過的帳密
   const clr = () => {
     const a = document.getElementById('acc'); const p = document.getElementById('pw');
     if (a) a.value = ''; if (p) p.value = '';
@@ -317,7 +412,9 @@ document.getElementById('loginBtn').onclick = async () => {
     document.getElementById('loginGate').style.display = 'none';
     document.getElementById('evalForm').style.display = 'block';
     document.getElementById('hello').textContent = `${res.name}（${res.role}）你好`;
+    renderIntro();
     renderFill();
+    renderSelf();
     switchTab('fill');
   } catch {
     errBox.style.display = 'block'; errBox.textContent = '連線失敗，請稍後再試';
@@ -325,7 +422,9 @@ document.getElementById('loginBtn').onclick = async () => {
 };
 
 document.getElementById('btnFill').onclick = () => switchTab('fill');
+document.getElementById('btnSelf').onclick = () => switchTab('self');
 document.getElementById('btnMyScores').onclick = () => switchTab('scores');
+document.getElementById('addPeerMsg').onclick = () => addPeerRow();
 
 document.getElementById('savePw').onclick = async () => {
   const msg = document.getElementById('pwMsg');
@@ -338,7 +437,7 @@ document.getElementById('savePw').onclick = async () => {
   try {
     const res = await changePassword(state.auth.account, state.auth.password, pw);
     if (res.ok) {
-      state.auth.password = pw; // 之後查成績仍可用
+      state.auth.password = pw;
       document.getElementById('newPw').value = '';
       document.getElementById('newPw2').value = '';
       msg.className = 'msg ok'; msg.textContent = '密碼已更新';
@@ -370,23 +469,44 @@ document.getElementById('submit').onclick = async () => {
   const btn = document.getElementById('submit');
   btn.disabled = true;
   const quarter = state.fillQuarter;
-  const payload = {
-    type: 'peer', quarter,
-    rater: state.me.name, raterRole: state.me.role,
-    note: '', ratings,
-  };
+  const payload = { type: 'peer', quarter, rater: state.me.name, raterRole: state.me.role, note: '', ratings };
   try {
     const res = await submitPeer(payload);
-    if (res.ok) {
-      showResult('ok', `已完成 ${qLabel(quarter)} 的評鑑，謝謝你的回饋！`);
-      document.getElementById('forms').style.display = 'none';
-    } else if (res.reason === 'duplicate') {
-      showResult('ok', `你已經評過 ${qLabel(quarter)} 了，謝謝！`);
-      btn.disabled = false;
-    } else { throw new Error('rejected'); }
-  } catch {
-    showResult('err', '送出失敗，請稍後再試一次'); btn.disabled = false;
+    if (res.ok) { showResult('ok', `已完成 ${qLabel(quarter)} 的評鑑，謝謝你的回饋！`); document.getElementById('forms').style.display = 'none'; }
+    else if (res.reason === 'duplicate') { showResult('ok', `你已經評過 ${qLabel(quarter)} 了，謝謝！`); btn.disabled = false; }
+    else { throw new Error('rejected'); }
+  } catch { showResult('err', '送出失敗，請稍後再試一次'); btn.disabled = false; }
+};
+
+document.getElementById('selfSubmit').onclick = async () => {
+  if (!state.selfQuarter) return;
+  const attCount = bankFor(state.me.role, 'attitude').length;
+  const perfCount = state.me.role === '計時' ? bankFor('計時', 'perf').length : 0;
+  const valid = (arr, n) => Array.isArray(arr) && arr.length === n && arr.every((s) => Number.isInteger(s) && s >= 1 && s <= 5);
+  const errBox = document.getElementById('selfErrors');
+  if (!valid(state.self.attitude, attCount) || (perfCount && !valid(state.self.performance, perfCount))) {
+    errBox.style.display = 'block'; errBox.textContent = '請完成所有項目的評分'; return;
   }
+  errBox.style.display = 'none';
+  const btn = document.getElementById('selfSubmit');
+  btn.disabled = true;
+  const quarter = state.selfQuarter;
+  const peerMessages = [...document.querySelectorAll('#peerMsgs .peermsg')]
+    .map((r) => ({ to: r.querySelector('.peer-to').value, msg: r.querySelector('.peer-msg').value }))
+    .filter((m) => m.to && m.msg.trim());
+  const payload = {
+    type: 'self', quarter, person: state.me.name, role: state.me.role,
+    attitude: state.self.attitude, performance: state.self.performance,
+    selfNote: document.getElementById('selfNote').value,
+    companyNote: document.getElementById('companyNote').value,
+    peerMessages,
+  };
+  try {
+    const res = await submitSelf(payload);
+    if (res.ok) { showSelfResult('ok', `已完成 ${qLabel(quarter)} 的自評，謝謝！`); document.getElementById('selfForms').style.display = 'none'; }
+    else if (res.reason === 'duplicate') { showSelfResult('ok', `你已經自評過 ${qLabel(quarter)} 了，謝謝！`); btn.disabled = false; }
+    else { throw new Error('rejected'); }
+  } catch { showSelfResult('err', '送出失敗，請稍後再試一次'); btn.disabled = false; }
 };
 
 init();

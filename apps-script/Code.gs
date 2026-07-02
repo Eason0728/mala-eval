@@ -129,6 +129,49 @@ function handlePeer(p) {
   return { ok: true };
 }
 
+// 自評紀錄：時間戳｜季度｜受評者｜角色｜類別｜分數JSON
+function alreadySelfSubmitted(quarter, person) {
+  const sh = ss().getSheetByName('自評紀錄');
+  if (!sh) return false;
+  const v = sh.getDataRange().getValues();
+  for (let i = 1; i < v.length; i++) if (v[i][1] === quarter && v[i][2] === person) return true;
+  return false;
+}
+
+// 自評留言：時間戳｜季度｜發話者｜類型(自己/夥伴/公司)｜對象｜內容
+function writeSelfMessages(quarter, person, p) {
+  let sh = ss().getSheetByName('自評留言');
+  if (!sh) {
+    sh = ss().insertSheet('自評留言');
+    sh.getRange(1, 1, 1, 6).setValues([['時間戳', '季度', '發話者', '類型', '對象', '內容']]);
+  }
+  const now = new Date();
+  const rows = [];
+  if (p.selfNote && String(p.selfNote).trim()) rows.push([now, quarter, person, '自己', person, String(p.selfNote)]);
+  (p.peerMessages || []).forEach((m) => {
+    if (m && m.to && m.msg && String(m.msg).trim()) rows.push([now, quarter, person, '夥伴', m.to, String(m.msg)]);
+  });
+  if (p.companyNote && String(p.companyNote).trim()) rows.push([now, quarter, person, '公司', '', String(p.companyNote)]);
+  if (rows.length) sh.getRange(sh.getLastRow() + 1, 1, rows.length, 6).setValues(rows);
+}
+
+// p: { type:'self', quarter, person, role, attitude:[], performance:[]|null, selfNote, companyNote, peerMessages:[{to,msg}] }
+function handleSelf(p) {
+  if (alreadySelfSubmitted(p.quarter, p.person)) return { ok: false, reason: 'duplicate' };
+  let sh = ss().getSheetByName('自評紀錄');
+  if (!sh) {
+    sh = ss().insertSheet('自評紀錄');
+    sh.getRange(1, 1, 1, 6).setValues([['時間戳', '季度', '受評者', '角色', '類別', '分數JSON']]);
+  }
+  const now = new Date();
+  sh.appendRow([now, p.quarter, p.person, p.role, '態度', JSON.stringify(p.attitude)]);
+  if (Array.isArray(p.performance) && p.performance.length) {
+    sh.appendRow([now, p.quarter, p.person, p.role, '表現', JSON.stringify(p.performance)]);
+  }
+  writeSelfMessages(p.quarter, p.person, p);
+  return { ok: true };
+}
+
 // p: { type:'supervisorPerf', passcode, quarter, ratee, scores:[] }
 function handleSupervisorPerf(p) {
   if (!checkPass(p.passcode)) return { ok: false, reason: 'unauthorized' };
@@ -192,7 +235,27 @@ function readAdminData(passcode, quarter) {
       }
     }
   }
-  return { config: publicConfig(), peerRecords, supervisorPerf, adjustments, results };
+  // 自評紀錄（含進正式平均、並可獨立呈現）
+  const selfSh = ss().getSheetByName('自評紀錄');
+  const selfRecords = [];
+  if (selfSh) {
+    const sv = selfSh.getDataRange().getValues();
+    for (let i = 1; i < sv.length; i++) {
+      if (sv[i][1] === quarter) {
+        selfRecords.push({ ratee: sv[i][2], role: sv[i][3], category: sv[i][4], scores: JSON.parse(sv[i][5] || '[]') });
+      }
+    }
+  }
+  // 對公司的話（匿名）
+  const msgSh = ss().getSheetByName('自評留言');
+  const companyMessages = [];
+  if (msgSh) {
+    const mv = msgSh.getDataRange().getValues();
+    for (let i = 1; i < mv.length; i++) {
+      if (mv[i][1] === quarter && mv[i][3] === '公司') companyMessages.push(mv[i][5]);
+    }
+  }
+  return { config: publicConfig(), peerRecords, supervisorPerf, adjustments, results, selfRecords, companyMessages };
 }
 
 function doGet(e) {
@@ -211,6 +274,7 @@ function doPost(e) {
     if (p.type === 'changePassword') return jsonOut(handleChangePassword(p));
     if (p.type === 'myScores') return jsonOut(handleMyScores(p));
     if (p.type === 'peer') return jsonOut(handlePeer(p));
+    if (p.type === 'self') return jsonOut(handleSelf(p));
     if (p.type === 'supervisorPerf') return jsonOut(handleSupervisorPerf(p));
     if (p.type === 'adjust') return jsonOut(handleAdjust(p));
     return jsonOut({ ok: false, reason: 'unknown type' });
@@ -307,7 +371,26 @@ function handleMyScores(p) {
   for (let i = 1; i < sp.length; i++) {
     if (sp[i][1] === name) supervisorPerf.push({ quarter: sp[i][0], scores: JSON.parse(sp[i][2] || '[]') });
   }
-  return { ok: true, name, role: acc.role, records, supervisorPerf, seeded: readResultDetail(name) };
+  const selfSh = ss().getSheetByName('自評紀錄');
+  const self = [];
+  if (selfSh) {
+    const sv = selfSh.getDataRange().getValues();
+    for (let i = 1; i < sv.length; i++) {
+      if (sv[i][2] === name) self.push({ quarter: sv[i][1], category: sv[i][4], scores: JSON.parse(sv[i][5] || '[]') });
+    }
+  }
+  // 別人對我說的話（匿名）＋我給自己的話
+  const msgSh = ss().getSheetByName('自評留言');
+  const messagesToMe = [];
+  const myNotes = [];
+  if (msgSh) {
+    const mv = msgSh.getDataRange().getValues();
+    for (let i = 1; i < mv.length; i++) {
+      if (mv[i][3] === '夥伴' && mv[i][4] === name) messagesToMe.push({ quarter: mv[i][1], msg: mv[i][5] });
+      if (mv[i][3] === '自己' && mv[i][2] === name) myNotes.push({ quarter: mv[i][1], msg: mv[i][5] });
+    }
+  }
+  return { ok: true, name, role: acc.role, records, supervisorPerf, seeded: readResultDetail(name), self, messagesToMe, myNotes };
 }
 
 // ====== 一次性：建立某季「結果細項」空白模板供手動填分（如第一季歷史資料）======

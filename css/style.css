@@ -114,6 +114,26 @@ details.help { margin: 4px 0 0; }
 details.help summary { font-size: 13px; }
 details.help div { font-size: 13px; color: #7c6f68; margin: 2px 0; }
 
+/* 開場白 */
+.intro > summary { cursor: pointer; font-weight: 800; color: var(--brand); list-style: none; }
+.intro > summary::-webkit-details-marker { display: none; }
+.intro > summary::before { content: '▾ '; }
+.intro:not([open]) > summary::before { content: '▸ '; }
+#introBody { margin-top: 8px; line-height: 1.75; }
+#introBody p { margin: 9px 0; }
+
+/* 姓名列 + 修改密碼（右側小連結，點開浮出表單） */
+.hellobar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 6px 0 4px; }
+.pwbox { position: relative; }
+.pwbox > summary { cursor: pointer; color: var(--brand); font-weight: 700; white-space: nowrap; list-style: none; }
+.pwbox > summary::-webkit-details-marker { display: none; }
+.pwbox .pwcard { position: absolute; right: 0; top: 100%; z-index: 5; width: 250px; margin-top: 6px; box-shadow: 0 8px 24px rgba(36, 26, 21, .16); }
+
+/* 自評留言 */
+.peermsg { margin: 8px 0; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: #fafafa; }
+.peermsg select { margin: 4px 0 6px; }
+.msgbubble { background: #fff6f2; border-left: 3px solid var(--gold-deep); border-radius: 8px; padding: 9px 12px; margin: 8px 0; line-height: 1.6; }
+
 /* 分頁（填寫評鑑／我的成績） */
 .tabs { display: flex; gap: 8px; margin: 14px 0; }
 .tab { background: #fff; color: var(--brand); border: 1.5px solid var(--brand); box-shadow: none; }

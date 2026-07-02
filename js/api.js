@@ -26,6 +26,7 @@ export function changePassword(account, oldPassword, newPassword) {
   return postJSON({ type: 'changePassword', account, oldPassword, newPassword });
 }
 export function submitPeer(payload) { return postJSON(payload); }
+export function submitSelf(payload) { return postJSON(payload); }
 export function submitSupervisorPerf(payload) { return postJSON(payload); }
 export function submitAdjust(payload) { return postJSON(payload); }
 
