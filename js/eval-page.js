@@ -31,6 +31,46 @@ function qYear(quarter) { return Number(String(quarter).split('-Q')[0]); }
 function qSortKey(quarter) { return qYear(quarter) * 10 + qNum(quarter); }
 function qLabel(quarter) { return `${qYear(quarter)} 年 ${QLABEL[qNum(quarter)]}`; }
 
+// ===== 草稿自動儲存（localStorage，只存在本裝置，送出後清除） =====
+function draftKey(kind, quarter) { return `mala-eval-draft:${state.auth.account}:${kind}:${quarter}`; }
+function savePeerDraft() {
+  if (!state.fillQuarter) return;
+  const obj = {};
+  state.ratings.forEach((v, k) => { obj[k] = { attitude: v.attitude, performance: v.performance }; });
+  try { localStorage.setItem(draftKey('peer', state.fillQuarter), JSON.stringify(obj)); } catch {}
+}
+function loadPeerDraft() {
+  if (!state.fillQuarter) return null;
+  try { const raw = localStorage.getItem(draftKey('peer', state.fillQuarter)); return raw ? JSON.parse(raw) : null; } catch { return null; }
+}
+function clearPeerDraft(quarter) {
+  const q = quarter || state.fillQuarter;
+  if (!q) return;
+  try { localStorage.removeItem(draftKey('peer', q)); } catch {}
+}
+function saveSelfDraft() {
+  if (!state.selfQuarter) return;
+  const peerMessages = [...document.querySelectorAll('#peerMsgs .peermsg')]
+    .map((r) => ({ to: r.querySelector('.peer-to').value, msg: r.querySelector('.peer-msg').value }));
+  const obj = {
+    attitude: state.self.attitude,
+    performance: state.self.performance,
+    selfNote: document.getElementById('selfNote').value,
+    companyNote: document.getElementById('companyNote').value,
+    peerMessages,
+  };
+  try { localStorage.setItem(draftKey('self', state.selfQuarter), JSON.stringify(obj)); } catch {}
+}
+function loadSelfDraft() {
+  if (!state.selfQuarter) return null;
+  try { const raw = localStorage.getItem(draftKey('self', state.selfQuarter)); return raw ? JSON.parse(raw) : null; } catch { return null; }
+}
+function clearSelfDraft(quarter) {
+  const q = quarter || state.selfQuarter;
+  if (!q) return;
+  try { localStorage.removeItem(draftKey('self', q)); } catch {}
+}
+
 function bankFor(role, kind) {
   const b = state.config.banks;
   if (role === '計時') return kind === 'attitude' ? b.ptAttitude : b.ptPerf;
@@ -64,7 +104,7 @@ function renderIntro() {
     <p>謝謝大家，有你們真好！</p>`;
 }
 
-function renderStars(values, idx, item) {
+function renderStars(values, idx, item, onSave) {
   const wrap = document.createElement('div');
   wrap.className = 'item';
   const title = document.createElement('div');
@@ -77,9 +117,11 @@ function renderStars(values, idx, item) {
     s.onclick = () => {
       values[idx] = v;
       [...stars.children].forEach((el, i) => el.classList.toggle('on', i < v));
+      if (onSave) onSave();
     };
     stars.appendChild(s);
   }
+  if (values[idx]) [...stars.children].forEach((el, i) => el.classList.toggle('on', i < values[idx]));
   const help = document.createElement('details');
   help.className = 'help';
   help.innerHTML = '<summary class="muted">星等說明</summary>'
@@ -87,19 +129,19 @@ function renderStars(values, idx, item) {
   wrap.append(title, stars, help);
   return wrap;
 }
-function catBlock(label, items, values, open) {
+function catBlock(label, items, values, open, onSave) {
   const d = document.createElement('details');
   d.className = 'cat';
   if (open) d.open = true;
   const sum = document.createElement('summary');
   sum.textContent = label;
   d.appendChild(sum);
-  items.forEach((it, i) => d.appendChild(renderStars(values, i, it)));
+  items.forEach((it, i) => d.appendChild(renderStars(values, i, it, onSave)));
   return d;
 }
 
 // ===== 他評（填寫評鑑）=====
-function rateeCard(r) {
+function rateeCard(r, draft) {
   const attitudeItems = bankFor(r.role, 'attitude');
   const showPerf = r.role === '計時' && state.me.role === '正職';
   const perfItems = showPerf ? bankFor('計時', 'perf') : [];
@@ -108,20 +150,24 @@ function rateeCard(r) {
     attitude: new Array(attitudeItems.length).fill(0),
     performance: showPerf ? new Array(perfItems.length).fill(0) : null,
   };
+  const saved = draft && draft[r.name];
+  if (saved && Array.isArray(saved.attitude)) entry.attitude = attitudeItems.map((_, i) => saved.attitude[i] || 0);
+  if (showPerf && saved && Array.isArray(saved.performance)) entry.performance = perfItems.map((_, i) => saved.performance[i] || 0);
   state.ratings.set(r.name, entry);
   const card = document.createElement('details');
   card.className = 'ratee';
   const sum = document.createElement('summary');
   sum.textContent = r.name;
   card.appendChild(sum);
-  card.appendChild(catBlock('職能態度', attitudeItems, entry.attitude));
-  if (showPerf) card.appendChild(catBlock('職能表現', perfItems, entry.performance));
+  card.appendChild(catBlock('職能態度', attitudeItems, entry.attitude, false, savePeerDraft));
+  if (showPerf) card.appendChild(catBlock('職能表現', perfItems, entry.performance, false, savePeerDraft));
   return card;
 }
 function renderForms() {
   const host = document.getElementById('forms');
   host.innerHTML = '';
   state.ratings.clear();
+  const draft = loadPeerDraft();
   const ratees = state.config.accounts.filter((a) => a.name !== state.me.name);
   [['正職同仁', '正職'], ['計時同仁', '計時']].forEach(([label, role]) => {
     const list = ratees.filter((r) => r.role === role);
@@ -131,9 +177,15 @@ function renderForms() {
     const h = document.createElement('h2');
     h.textContent = label;
     sec.appendChild(h);
-    list.forEach((r) => sec.appendChild(rateeCard(r)));
+    list.forEach((r) => sec.appendChild(rateeCard(r, draft)));
     host.appendChild(sec);
   });
+  if (draft) {
+    const note = document.createElement('div');
+    note.className = 'msg';
+    note.textContent = '📝 已自動還原你上次未送出的填寫進度';
+    host.prepend(note);
+  }
 }
 function renderFill() {
   const t = fillTarget();
@@ -177,24 +229,37 @@ function renderSelf() {
   host.innerHTML = '';
   const attItems = bankFor(state.me.role, 'attitude');
   const perfItems = state.me.role === '計時' ? bankFor('計時', 'perf') : [];
+  const draft = loadSelfDraft();
   state.self = {
-    attitude: new Array(attItems.length).fill(0),
-    performance: perfItems.length ? new Array(perfItems.length).fill(0) : null,
+    attitude: attItems.map((_, i) => (draft && Array.isArray(draft.attitude) && draft.attitude[i]) || 0),
+    performance: perfItems.length ? perfItems.map((_, i) => (draft && Array.isArray(draft.performance) && draft.performance[i]) || 0) : null,
   };
-  host.appendChild(catBlock('職能態度（自評）', attItems, state.self.attitude, true));
-  if (perfItems.length) host.appendChild(catBlock('職能表現（自評）', perfItems, state.self.performance, true));
+  host.appendChild(catBlock('職能態度（自評）', attItems, state.self.attitude, true, saveSelfDraft));
+  if (perfItems.length) host.appendChild(catBlock('職能表現（自評）', perfItems, state.self.performance, true, saveSelfDraft));
   // 留言欄
-  document.getElementById('selfNote').value = '';
-  document.getElementById('companyNote').value = '';
+  document.getElementById('selfNote').value = (draft && draft.selfNote) || '';
+  document.getElementById('companyNote').value = (draft && draft.companyNote) || '';
+  document.getElementById('selfNote').oninput = saveSelfDraft;
+  document.getElementById('companyNote').oninput = saveSelfDraft;
   document.getElementById('peerMsgs').innerHTML = '';
-  addPeerRow();
+  if (draft && Array.isArray(draft.peerMessages) && draft.peerMessages.length) {
+    draft.peerMessages.forEach((m) => addPeerRow(m.to, m.msg));
+  } else {
+    addPeerRow();
+  }
+  if (draft) {
+    const note = document.createElement('div');
+    note.className = 'msg';
+    note.textContent = '📝 已自動還原你上次未送出的自評進度';
+    host.prepend(note);
+  }
 }
 
 function peerOptions() {
   return state.config.accounts.filter((a) => a.name !== state.me.name)
     .map((a) => `<option value="${a.name}">${a.name}（${a.role}）</option>`).join('');
 }
-function addPeerRow() {
+function addPeerRow(to, msg) {
   const host = document.getElementById('peerMsgs');
   const n = host.children.length + 1;
   const row = document.createElement('div');
@@ -203,6 +268,10 @@ function addPeerRow() {
     <select class="peer-to"><option value="">選擇夥伴…</option>${peerOptions()}</select>
     <textarea class="peer-msg" rows="1" placeholder="想說的話…" style="width:100%"></textarea>`;
   host.appendChild(row);
+  if (to) row.querySelector('.peer-to').value = to;
+  if (msg) row.querySelector('.peer-msg').value = msg;
+  row.querySelector('.peer-to').onchange = saveSelfDraft;
+  row.querySelector('.peer-msg').oninput = saveSelfDraft;
 }
 function escapeHtml(s) {
   return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -359,9 +428,10 @@ async function renderScores() {
   const catList = (q, kind) => [...(byQuarter[q][kind] || [])];
   const official = (q) => [...catList(q, 'att'), ...catList(q, 'perf')];
 
-  // 當季 vs 上季（官方值）
-  const trend = compareBlock(`細項分數：當季 vs 上季`, official(curQ).map((x) => x.label),
-    prevQ ? official(prevQ) : [], official(curQ), prevQ ? qLabel(prevQ) : '上季', `當季（${qLabel(curQ)}）`);
+  // 最新一季 vs 前一季（官方值），直接標季度名稱避免「當季」誤解
+  const trendTitle = prevQ ? `細項分數：${qLabel(curQ)} vs ${qLabel(prevQ)}` : `細項分數：${qLabel(curQ)}`;
+  const trend = compareBlock(trendTitle, official(curQ).map((x) => x.label),
+    prevQ ? official(prevQ) : [], official(curQ), prevQ ? qLabel(prevQ) : '前一季（無資料）', qLabel(curQ));
 
   // 自評 vs 他評（當季）
   let selfCompare = '';
@@ -472,8 +542,8 @@ document.getElementById('submit').onclick = async () => {
   const payload = { type: 'peer', quarter, rater: state.me.name, raterRole: state.me.role, note: '', ratings };
   try {
     const res = await submitPeer(payload);
-    if (res.ok) { showResult('ok', `已完成 ${qLabel(quarter)} 的評鑑，謝謝你的回饋！`); document.getElementById('forms').style.display = 'none'; }
-    else if (res.reason === 'duplicate') { showResult('ok', `你已經評過 ${qLabel(quarter)} 了，謝謝！`); btn.disabled = false; }
+    if (res.ok) { clearPeerDraft(quarter); showResult('ok', `已完成 ${qLabel(quarter)} 的評鑑，謝謝你的回饋！`); document.getElementById('forms').style.display = 'none'; }
+    else if (res.reason === 'duplicate') { clearPeerDraft(quarter); showResult('ok', `你已經評過 ${qLabel(quarter)} 了，謝謝！`); btn.disabled = false; }
     else { throw new Error('rejected'); }
   } catch { showResult('err', '送出失敗，請稍後再試一次'); btn.disabled = false; }
 };
@@ -503,8 +573,8 @@ document.getElementById('selfSubmit').onclick = async () => {
   };
   try {
     const res = await submitSelf(payload);
-    if (res.ok) { showSelfResult('ok', `已完成 ${qLabel(quarter)} 的自評，謝謝！`); document.getElementById('selfForms').style.display = 'none'; }
-    else if (res.reason === 'duplicate') { showSelfResult('ok', `你已經自評過 ${qLabel(quarter)} 了，謝謝！`); btn.disabled = false; }
+    if (res.ok) { clearSelfDraft(quarter); showSelfResult('ok', `已完成 ${qLabel(quarter)} 的自評，謝謝！`); document.getElementById('selfForms').style.display = 'none'; }
+    else if (res.reason === 'duplicate') { clearSelfDraft(quarter); showSelfResult('ok', `你已經自評過 ${qLabel(quarter)} 了，謝謝！`); btn.disabled = false; }
     else { throw new Error('rejected'); }
   } catch { showSelfResult('err', '送出失敗，請稍後再試一次'); btn.disabled = false; }
 };
