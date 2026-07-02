@@ -406,6 +406,7 @@ async function renderScores() {
   const bubbles = (arr) => arr.map((m) => `<div class="msgbubble">${escapeHtml(m.msg)}</div>`).join('');
   let msgBlock = '';
   if (data.messagesToMe && data.messagesToMe.length) msgBlock += `<div class="card"><b>💬 夥伴對你說的話（匿名）</b>${bubbles(data.messagesToMe)}</div>`;
+  else msgBlock += `<div class="card"><b>💬 夥伴對你說的話（匿名）</b><p class="muted">這一季還沒有夥伴留言給你</p></div>`;
   if (data.myNotes && data.myNotes.length) msgBlock += `<div class="card"><b>💌 你寫給自己的話</b>${bubbles(data.myNotes)}</div>`;
 
   if (!quarters.length) {
