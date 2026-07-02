@@ -1,15 +1,55 @@
-import { fetchConfig, fetchAdminData, submitAdjust, submitSupervisorPerf } from './api.js';
-import { aggregateRatee, round1, raterTotal } from './scoring.js';
+import { fetchAdminData, submitAdjust, submitSupervisorPerf } from './api.js';
+import { round1, raterTotal, averageTotals, finalScore } from './scoring.js';
 
 let DATA = null;
 let PASS = '';
 let CURRENT_Q = '';
 
+const QZH = { 1: '第一季', 2: '第二季', 3: '第三季', 4: '第四季' };
+function qNum(q) { return Number(String(q).split('-Q')[1]); }
+function quarterLabel(q) { return `${String(q).split('-Q')[0]} 年 ${QZH[qNum(q)]}`; }
+
+function currentYQ() {
+  const d = new Date();
+  return { year: d.getFullYear(), q: Math.floor(d.getMonth() / 3) + 1 };
+}
+function selectedAdminQuarter() {
+  return `${document.getElementById('adminYear').value}-Q${document.getElementById('adminQuarter').value}`;
+}
+function fillAdminSelectors() {
+  // 預設＝剛結束（上一個）季度，跟填寫頁對齊
+  const d = new Date();
+  let year = d.getFullYear();
+  let q = Math.floor(d.getMonth() / 3) + 1 - 1;
+  if (q < 1) { q = 4; year -= 1; }
+  const ys = document.getElementById('adminYear');
+  const qs = document.getElementById('adminQuarter');
+  ys.innerHTML = '';
+  for (let y = year - 1; y <= year + 1; y++) {
+    const o = document.createElement('option');
+    o.value = y; o.textContent = `${y} 年`;
+    if (y === year) o.selected = true;
+    ys.appendChild(o);
+  }
+  qs.innerHTML = '';
+  ['第一季', '第二季', '第三季', '第四季'].forEach((lbl, i) => {
+    const o = document.createElement('option');
+    o.value = i + 1; o.textContent = lbl;
+    if (i + 1 === q) o.selected = true;
+    qs.appendChild(o);
+  });
+  ys.onchange = qs.onchange = async () => {
+    CURRENT_Q = selectedAdminQuarter();
+    document.getElementById('detail').innerHTML = '';
+    await reload();
+  };
+}
+
 function buildRows() {
-  const { config, peerRecords, supervisorPerf, adjustments } = DATA;
+  const { config, peerRecords, supervisorPerf, adjustments, results } = DATA;
   const adjBy = new Map(adjustments.map((a) => [a.ratee, a]));
   const spBy = new Map(supervisorPerf.map((s) => [s.ratee, raterTotal(s.scores)]));
-  const attMap = new Map(); // ratee -> totals[]
+  const attMap = new Map(); // ratee -> 每位評核者的態度總分[]
   const perfMap = new Map();
   config.accounts.forEach((a) => { attMap.set(a.name, []); perfMap.set(a.name, []); });
   peerRecords.forEach((r) => {
@@ -18,22 +58,44 @@ function buildRows() {
     if (r.category === '態度' && attMap.has(r.ratee)) attMap.get(r.ratee).push(t);
     if (r.category === '表現' && perfMap.has(r.ratee)) perfMap.get(r.ratee).push(t);
   });
-  return config.accounts.map((a) => aggregateRatee({
-    ratee: a.name, role: a.role,
-    attitudeTotals: attMap.get(a.name),
-    performanceTotals: perfMap.get(a.name),
-    supervisorPerf: a.role === '正職' ? (spBy.has(a.name) ? spBy.get(a.name) : null) : null,
-    adjustment: adjBy.get(a.name) || {},
-  }));
+  // 手動填的成績（結果細項，如第一季）：每人每類別加總
+  const seedAtt = new Map(); const seedPerf = new Map();
+  (results || []).forEach((r) => {
+    const m = r.category === '態度' ? seedAtt : seedPerf;
+    m.set(r.ratee, round1((m.get(r.ratee) || 0) + r.score));
+  });
+  return config.accounts.map((a) => {
+    const attList = attMap.get(a.name);
+    const perfList = perfMap.get(a.name);
+    const adj = adjBy.get(a.name) || {};
+    // 態度：優先互評紀錄平均，否則用手動填的加總
+    let attitude = averageTotals(attList);
+    let attManual = false;
+    if (attitude === null && seedAtt.has(a.name)) { attitude = seedAtt.get(a.name); attManual = true; }
+    // 表現：正職=主管評分；計時=正職互評平均；皆無則用手動填
+    let performance = a.role === '正職' ? (spBy.has(a.name) ? spBy.get(a.name) : null) : averageTotals(perfList);
+    let perfManual = false;
+    if ((performance === null || performance === undefined) && seedPerf.has(a.name)) { performance = seedPerf.get(a.name); perfManual = true; }
+    const attitudeAdjust = adj.attitudeAdjust || 0;
+    const performanceAdjust = adj.performanceAdjust || 0;
+    const { score, performanceCounted } = finalScore({ attitude, attitudeAdjust, performance, performanceAdjust });
+    return {
+      ratee: a.name, role: a.role,
+      attitude, attitudeAdjust, performance, performanceAdjust, performanceCounted,
+      finalScore: score,
+      attitudeCount: attList.length, performanceCount: a.role === '正職' ? (spBy.has(a.name) ? 1 : 0) : perfList.length,
+      attManual, perfManual,
+    };
+  });
 }
 
 function numText(n) { return n === null ? '—' : round1(n); }
 
 function renderProgress(rows) {
-  const att = rows.reduce((a, r) => a + r.attitudeCount, 0);
-  const perf = rows.reduce((a, r) => a + r.performanceCount, 0);
+  const attP = rows.filter((r) => r.attitude !== null && r.attitude !== undefined).length;
+  const perfP = rows.filter((r) => r.performance !== null && r.performance !== undefined).length;
   document.getElementById('progress').innerHTML =
-    `<b>填寫進度</b>（${CURRENT_Q}）：態度評分 ${att} 筆、表現評分 ${perf} 筆`;
+    `<b>${CURRENT_Q}</b>　態度有分 ${attP} 人、表現有分 ${perfP} 人`;
 }
 
 function renderOverview(rows) {
@@ -43,7 +105,7 @@ function renderOverview(rows) {
     <td>${r.role}</td>
     <td>${numText(r.attitude)}</td><td>${r.attitudeAdjust}</td>
     <td>${r.performanceCounted || r.performance !== null ? numText(r.performance) : '未計'}</td><td>${r.performanceAdjust}</td>
-    <td>${numText(r.finalScore)}</td><td>${r.attitudeCount}</td><td>${r.performanceCount}</td>
+    <td>${numText(r.finalScore)}</td><td>${r.attManual ? '手動' : r.attitudeCount}</td><td>${r.perfManual ? '手動' : r.performanceCount}</td>
   </tr>`).join('');
   const host = document.getElementById('overview');
   host.innerHTML = `<b>總覽</b><table>${head}${body}</table>`;
@@ -130,9 +192,9 @@ if (adminEntry) {
 
 document.getElementById('enter').onclick = async () => {
   PASS = document.getElementById('pass').value;
+  fillAdminSelectors();
+  CURRENT_Q = selectedAdminQuarter();
   try {
-    const cfg = await fetchConfig();
-    CURRENT_Q = cfg.quarter;
     const data = await fetchAdminData(PASS, CURRENT_Q);
     if (data.error) { document.getElementById('gateErr').style.display = 'block'; return; }
     DATA = data;
@@ -146,3 +208,17 @@ document.getElementById('enter').onclick = async () => {
     document.getElementById('gateErr').textContent = '連線失敗，請稍後再試';
   }
 };
+
+const btnPrint = document.getElementById('btnPrint');
+if (btnPrint) {
+  btnPrint.onclick = () => {
+    document.title = `新竹光復店＿績效評核＿${QZH[qNum(CURRENT_Q)]}`;
+    const logo = document.querySelector('.brand-logo');
+    const logoSrc = logo ? logo.src : 'assets/logo.png';
+    document.getElementById('printHeader').innerHTML =
+      `<img src="${logoSrc}" alt="麻的小辛辣" style="height:48px;display:block;margin:0 0 10px" />`
+      + `<h2 style="border:0;padding:0;margin:0">新竹光復店　績效評核表</h2>`
+      + `<div style="margin-top:2px">${quarterLabel(CURRENT_Q)}</div>`;
+    window.print();
+  };
+}

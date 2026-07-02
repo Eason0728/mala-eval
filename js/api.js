@@ -19,6 +19,9 @@ export async function fetchConfig() {
 export function login(account, password) {
   return postJSON({ type: 'login', account, password });
 }
+export function myScores(account, password) {
+  return postJSON({ type: 'myScores', account, password });
+}
 export function submitPeer(payload) { return postJSON(payload); }
 export function submitSupervisorPerf(payload) { return postJSON(payload); }
 export function submitAdjust(payload) { return postJSON(payload); }

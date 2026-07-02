@@ -1,22 +1,142 @@
-:root { --brand:#c0392b; --bg:#fff7f5; --ink:#333; --line:#e6d6d2; }
+:root {
+  --brand: #ea340c;       /* 品牌紅 */
+  --brand-dark: #c42a0a;
+  --gold: #ffd803;        /* 火焰金 */
+  --gold-deep: #f7a50a;
+  --ink: #241a15;         /* 近黑（暖） */
+  --bg: #f4f4f5;          /* 淺灰 */
+  --card: #ffffff;
+  --line: #f0dbd1;
+  --muted: #9c8b83;
+}
 * { box-sizing: border-box; }
-body { margin:0; font-family: system-ui, "PingFang TC", sans-serif; color:var(--ink); background:var(--bg); }
-.wrap { max-width:760px; margin:0 auto; padding:16px; }
-h1 { color:var(--brand); font-size:20px; }
-h3 { margin:8px 0; }
-.card { background:#fff; border:1px solid var(--line); border-radius:12px; padding:14px; margin:12px 0; }
-.stars { display:flex; gap:6px; font-size:26px; cursor:pointer; user-select:none; }
-.stars span { color:#ddd; }
-.stars span.on { color:#f1c40f; }
-details { margin:4px 0 12px; }
-summary { cursor:pointer; }
-button { background:var(--brand); color:#fff; border:0; border-radius:8px; padding:10px 16px; font-size:16px; cursor:pointer; }
-button:disabled { opacity:.5; cursor:default; }
-input, textarea { font-size:15px; padding:4px 6px; border:1px solid var(--line); border-radius:6px; }
-.msg { padding:10px; border-radius:8px; margin:10px 0; }
-.msg.ok { background:#eafaf1; color:#1e8449; }
-.msg.err { background:#fdecea; color:#c0392b; }
-table { width:100%; border-collapse:collapse; margin-top:8px; }
-th, td { border:1px solid var(--line); padding:6px; font-size:14px; text-align:center; }
-.muted { color:#999; }
-a { color:var(--brand); }
+body {
+  margin: 0; color: var(--ink);
+  font-family: "PingFang TC", "Noto Sans TC", system-ui, sans-serif;
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 780px; margin: 0 auto; padding: 16px 16px 48px; }
+
+/* 品牌頁首 */
+.app-header {
+  background: var(--brand);
+  border-radius: 18px;
+  padding: 20px 16px 16px;
+  text-align: center;
+  margin: 6px 0 20px;
+  box-shadow: 0 10px 26px rgba(234, 52, 12, .20);
+}
+.brand-logo { height: 56px; display: block; margin: 0 auto; }
+.app-subtitle {
+  color: #fff; font-weight: 800; letter-spacing: 6px;
+  font-size: 15px; margin-top: 10px; padding-left: 6px;
+}
+
+h1 { display: none; }
+h2 {
+  color: var(--brand); font-size: 15px; font-weight: 800;
+  margin: 22px 0 10px; padding-left: 10px;
+  border-left: 4px solid var(--gold-deep); letter-spacing: 1px;
+}
+h3 { margin: 8px 0; }
+
+/* 卡片 */
+.card {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 16px; padding: 16px; margin: 14px 0;
+  box-shadow: 0 2px 14px rgba(36, 26, 21, .05);
+}
+
+/* 星等 */
+.stars { display: flex; gap: 6px; font-size: 26px; cursor: pointer; user-select: none; }
+.stars span { color: #ecdfd8; transition: color .1s; }
+.stars span.on { color: var(--gold-deep); }
+
+/* 按鈕 */
+button {
+  background: var(--brand); color: #fff; border: 0; border-radius: 10px;
+  padding: 10px 18px; font-size: 15px; font-weight: 700; cursor: pointer;
+  box-shadow: 0 4px 12px rgba(234, 52, 12, .22);
+  transition: transform .05s, background .15s;
+}
+button:hover { background: var(--brand-dark); }
+button:active { transform: translateY(1px); }
+button:disabled { opacity: .5; box-shadow: none; cursor: default; }
+
+/* 輸入 */
+input, textarea, select {
+  font-size: 15px; padding: 8px 10px; border: 1px solid var(--line);
+  border-radius: 10px; background: #fff; color: var(--ink);
+}
+input:focus, textarea:focus, select:focus {
+  outline: 2px solid rgba(234, 52, 12, .25); border-color: var(--brand);
+}
+
+/* 訊息 */
+.msg { padding: 12px 14px; border-radius: 12px; margin: 12px 0; font-weight: 600; }
+.msg.ok { background: #eafaf1; color: #1e8449; }
+.msg.err { background: #fdecea; color: var(--brand-dark); }
+
+/* 表格 */
+table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+th, td { border: 1px solid var(--line); padding: 8px 6px; font-size: 14px; text-align: center; }
+th { background: #fff6f2; color: var(--brand-dark); font-weight: 700; }
+
+.muted { color: var(--muted); }
+a { color: var(--brand); font-weight: 600; }
+
+/* 年度／季度選單列 */
+.selectors { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+
+/* 名單分區 */
+.group { margin-bottom: 6px; }
+
+/* 每位同仁一張卡（可展開） */
+details.ratee {
+  background: #fff; border: 1px solid var(--line); border-radius: 14px;
+  padding: 4px 16px; margin: 10px 0; box-shadow: 0 2px 12px rgba(36, 26, 21, .05);
+  transition: box-shadow .15s, border-color .15s;
+}
+details.ratee[open] { box-shadow: 0 6px 18px rgba(234, 52, 12, .10); border-color: #f3c9bd; }
+details.ratee > summary {
+  font-weight: 800; font-size: 17px; padding: 12px 0; cursor: pointer; list-style: none;
+  display: flex; align-items: center; gap: 10px;
+}
+details.ratee > summary::-webkit-details-marker { display: none; }
+details.ratee > summary::before { content: '🔥'; font-size: 15px; filter: grayscale(1) opacity(.45); }
+details.ratee[open] > summary::before { filter: none; }
+
+details.cat { margin: 4px 0; border-top: 1px dashed var(--line); padding: 8px 0 6px 6px; }
+details.cat > summary { font-weight: 700; color: var(--brand); padding: 6px 0; cursor: pointer; }
+.item { margin: 10px 0 14px; }
+details.help { margin: 4px 0 0; }
+details.help summary { font-size: 13px; }
+details.help div { font-size: 13px; color: #7c6f68; margin: 2px 0; }
+
+/* 分頁（填寫評鑑／我的成績） */
+.tabs { display: flex; gap: 8px; margin: 14px 0; }
+.tab { background: #fff; color: var(--brand); border: 1.5px solid var(--brand); box-shadow: none; }
+.tab.active { background: var(--brand); color: #fff; box-shadow: 0 4px 12px rgba(234, 52, 12, .22); }
+
+/* 我的成績折線圖 */
+.chartwrap { overflow-x: auto; margin-top: 8px; }
+.c-prev { stroke: #b7a9a2; }
+circle.c-prev { fill: #b7a9a2; }
+.c-cur { stroke: var(--brand); }
+circle.c-cur { fill: var(--brand); }
+
+#adminEntry { color: var(--muted); font-weight: 600; }
+
+/* 列印（存 PDF）：只留績效評核表 */
+.print-only { display: none; }
+@media print {
+  body > .wrap > *:not(#adminSection) { display: none !important; }
+  #gate, .selectors, #progress, #detail { display: none !important; }
+  .print-only { display: block !important; margin: 0 0 12px; }
+  .print-only h2 { color: #000; border: 0; padding: 0; }
+  #overview { border: 0 !important; padding: 0 !important; box-shadow: none !important; }
+  #overview b { font-size: 15px; }
+  #overview table { font-size: 12px; width: 100%; }
+  #overview a { color: #000; text-decoration: none; }
+}

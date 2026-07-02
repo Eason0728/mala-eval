@@ -3,12 +3,15 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>計時同仁評鑑</title>
+  <title>麻的小辛辣。績效評核系統</title>
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
   <div class="wrap">
-    <h1 id="title">計時同仁評鑑</h1>
+    <header class="app-header">
+      <img class="brand-logo" src="assets/logo.png" alt="麻的小辛辣" />
+      <div class="app-subtitle">績效評核系統</div>
+    </header>
 
     <!-- 同仁互評區（預設顯示） -->
     <div id="evalSection">
@@ -23,14 +26,23 @@
       <!-- 評鑑表單（登入後顯示） -->
       <div id="evalForm" style="display:none">
         <p id="hello" class="muted"></p>
-        <p>誠實面對、客觀檢視。每項點選星等，星等說明可展開參考。謝謝你的回饋 ⭐️</p>
-        <div id="forms"></div>
-        <div class="card">
-          <label>整體備註（選填）<br /><textarea id="note" rows="2" style="width:100%"></textarea></label>
+        <div class="tabs">
+          <button id="btnFill" class="tab active">填寫評鑑</button>
+          <button id="btnMyScores" class="tab">我的成績</button>
         </div>
-        <div id="errors" class="msg err" style="display:none"></div>
-        <button id="submit">送出評鑑</button>
-        <div id="result" class="msg" style="display:none"></div>
+
+        <!-- 填寫區 -->
+        <div id="fillPane">
+          <div id="fillBanner" class="card"></div>
+          <p id="fillHint" class="muted">點同仁姓名展開，選「職能態度／職能表現」再點開細項評分。星等說明可展開參考 ⭐️</p>
+          <div id="forms"></div>
+          <div id="errors" class="msg err" style="display:none"></div>
+          <button id="submit">送出評鑑</button>
+          <div id="result" class="msg" style="display:none"></div>
+        </div>
+
+        <!-- 我的成績區 -->
+        <div id="scorePane" style="display:none"></div>
       </div>
     </div>
 
@@ -47,6 +59,12 @@
         <div id="gateErr" class="msg err" style="display:none">通行碼錯誤</div>
       </div>
       <div id="panel" style="display:none">
+        <div class="selectors card">
+          <label>年度 <select id="adminYear"></select></label>
+          <label>季度 <select id="adminQuarter"></select></label>
+          <button id="btnPrint">列印 PDF</button>
+        </div>
+        <div id="printHeader" class="print-only"></div>
         <div id="progress" class="card"></div>
         <div id="overview" class="card"></div>
         <div id="detail" class="card"></div>

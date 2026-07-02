@@ -1,8 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  raterTotal, averageTotals, round1, finalScore, aggregateRatee,
+  raterTotal, averageTotals, averageItems, round1, finalScore, aggregateRatee,
 } from '../js/scoring.js';
+
+test('averageItems 每題平均；加總等於 averageTotals；空回 null', () => {
+  assert.deepEqual(averageItems([[5, 4], [3, 4]]), [4, 4]);
+  assert.equal(averageItems([]), null);
+  const list = [[5, 4, 3], [4, 4, 2]];
+  const perItem = averageItems(list);
+  const sumPerItem = perItem.reduce((a, b) => a + b, 0);
+  const avgTotals = averageTotals(list.map((s) => s.reduce((a, b) => a + b, 0)));
+  assert.equal(round1(sumPerItem), round1(avgTotals));
+});
 
 test('raterTotal 加總；空回 null', () => {
   assert.equal(raterTotal([5, 4, 3]), 12);

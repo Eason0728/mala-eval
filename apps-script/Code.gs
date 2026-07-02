@@ -181,7 +181,18 @@ function readAdminData(passcode, quarter) {
       });
     }
   }
-  return { config: publicConfig(), peerRecords, supervisorPerf, adjustments };
+  // 手動填的歷史成績（結果細項），如第一季
+  const resSh = ss().getSheetByName('結果細項');
+  const results = [];
+  if (resSh) {
+    const rv = resSh.getDataRange().getValues();
+    for (let i = 1; i < rv.length; i++) {
+      if (rv[i][0] === quarter && rv[i][6] !== '' && rv[i][6] !== null) {
+        results.push({ ratee: rv[i][1], category: rv[i][3], label: rv[i][5], score: Number(rv[i][6]) });
+      }
+    }
+  }
+  return { config: publicConfig(), peerRecords, supervisorPerf, adjustments, results };
 }
 
 function doGet(e) {
@@ -197,6 +208,7 @@ function doPost(e) {
   try {
     const p = JSON.parse(e.postData.contents);
     if (p.type === 'login') return jsonOut(handleLogin(p));
+    if (p.type === 'myScores') return jsonOut(handleMyScores(p));
     if (p.type === 'peer') return jsonOut(handlePeer(p));
     if (p.type === 'supervisorPerf') return jsonOut(handleSupervisorPerf(p));
     if (p.type === 'adjust') return jsonOut(handleAdjust(p));
@@ -236,4 +248,80 @@ function seedBanksFromRepo() {
   });
   return '題庫寫入完成：計時態度 ' + (BANKS.pt_attitude || []).length + '、計時表現 ' + (BANKS.pt_perf || []).length
     + '、正職態度 ' + (BANKS.ft_attitude || []).length + '、正職表現 ' + (BANKS.ft_perf || []).length + '（待做）';
+}
+
+// ====== 一次性：擴大 CFG_accounts 讀取範圍到 200 列 ======
+function fixAccountsRange() {
+  const book = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = book.getSheetByName('帳號');
+  book.getNamedRanges().forEach(function (nr) { if (nr.getName() === 'CFG_accounts') nr.remove(); });
+  book.setNamedRange('CFG_accounts', sh.getRange(2, 1, 199, 5));
+  return 'CFG_accounts 已擴大到 A2:E200';
+}
+
+// ====== 個人成績查詢 ======
+// 結果細項分頁：季度 | 受評者 | 角色 | 類別 | 題key | 題目 | 分數（手動填，如第一季歷史資料）
+function readResultDetail(name) {
+  const sh = ss().getSheetByName('結果細項');
+  if (!sh) return [];
+  const v = sh.getDataRange().getValues();
+  const out = [];
+  for (let i = 1; i < v.length; i++) {
+    if (v[i][1] === name && v[i][6] !== '' && v[i][6] !== null) {
+      out.push({ quarter: v[i][0], category: v[i][3], label: v[i][5], score: Number(v[i][6]) });
+    }
+  }
+  return out;
+}
+
+// p: { type:'myScores', account, password } → 只回傳本人的資料
+function handleMyScores(p) {
+  const acc = readAccounts().find((a) => a.account === String(p.account) && a.password === String(p.password));
+  if (!acc) return { ok: false, reason: 'invalid' };
+  const name = acc.name;
+  const rec = ss().getSheetByName('評分紀錄').getDataRange().getValues();
+  const records = [];
+  for (let i = 1; i < rec.length; i++) {
+    if (rec[i][4] === name) records.push({ quarter: rec[i][1], category: rec[i][6], scores: JSON.parse(rec[i][7] || '[]') });
+  }
+  const sp = ss().getSheetByName('主管評分').getDataRange().getValues();
+  const supervisorPerf = [];
+  for (let i = 1; i < sp.length; i++) {
+    if (sp[i][1] === name) supervisorPerf.push({ quarter: sp[i][0], scores: JSON.parse(sp[i][2] || '[]') });
+  }
+  return { ok: true, name, role: acc.role, records, supervisorPerf, seeded: readResultDetail(name) };
+}
+
+// ====== 一次性：建立某季「結果細項」空白模板供手動填分（如第一季歷史資料）======
+function seedResultTemplate(quarter) {
+  const book = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = book.getSheetByName('結果細項');
+  if (!sh) sh = book.insertSheet('結果細項');
+  if (sh.getLastRow() === 0) {
+    sh.getRange(1, 1, 1, 7).setValues([['季度', '受評者', '角色', '類別', '題key', '題目', '分數']]);
+  }
+  const rows = [];
+  readAccounts().forEach((a) => {
+    const att = a.role === '計時' ? readBank('CFG_pt_attitude') : readBank('CFG_ft_attitude');
+    const perf = a.role === '計時' ? readBank('CFG_pt_perf') : readBank('CFG_ft_perf');
+    att.forEach((it) => rows.push([quarter, a.name, a.role, '態度', it.key, it.label, '']));
+    perf.forEach((it) => rows.push([quarter, a.name, a.role, '表現', it.key, it.label, '']));
+  });
+  if (rows.length) sh.getRange(sh.getLastRow() + 1, 1, rows.length, 7).setValues(rows);
+  return '已建立 ' + quarter + ' 結果細項模板 ' + rows.length + ' 列，請填「分數」欄';
+}
+
+// ====== 一次性：從 repo 讀歷史成績寫入「結果細項」（自動代入，如第一季）======
+// 需要 UrlFetch 授權；資料檔在 repo（public）：data/results-<季度>.json
+function seedResultsFromRepo() {
+  const url = 'https://raw.githubusercontent.com/Eason0728/mala-eval/main/data/results-2026Q1.json';
+  const rows = JSON.parse(UrlFetchApp.fetch(url, { muteHttpExceptions: true }).getContentText());
+  const book = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = book.getSheetByName('結果細項');
+  if (!sh) sh = book.insertSheet('結果細項');
+  sh.clear();
+  sh.getRange(1, 1, 1, 7).setValues([['季度', '受評者', '角色', '類別', '題key', '題目', '分數']]);
+  const data = rows.map((r) => [r.quarter, r.ratee, r.role, r.category, r.key, r.label, r.score]);
+  if (data.length) sh.getRange(2, 1, data.length, 7).setValues(data);
+  return '結果細項寫入 ' + data.length + ' 列（' + (rows[0] && rows[0].quarter) + '）';
 }

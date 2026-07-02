@@ -12,6 +12,16 @@ export function averageTotals(totalsList) {
   return totalsList.reduce((a, b) => a + b, 0) / totalsList.length;
 }
 
+// 多位評核者的每題分數 → 每題平均（長度同題數）；空回 null。
+// 註：每題平均加總 === averageTotals（線性），故細項與小計一致。
+export function averageItems(scoresList) {
+  if (!scoresList || scoresList.length === 0) return null;
+  const n = scoresList[0].length;
+  const sums = new Array(n).fill(0);
+  for (const s of scoresList) for (let i = 0; i < n; i++) sums[i] += s[i];
+  return sums.map((x) => x / scoresList.length);
+}
+
 // 四捨五入到小數 1 位。
 export function round1(n) {
   return Math.round(n * 10) / 10;
