@@ -407,7 +407,22 @@ async function renderScores() {
   let msgBlock = '';
   if (data.messagesToMe && data.messagesToMe.length) msgBlock += `<div class="card"><b>💬 夥伴對你說的話（匿名）</b>${bubbles(data.messagesToMe)}</div>`;
   else msgBlock += `<div class="card"><b>💬 夥伴對你說的話（匿名）</b><p class="muted">這一季還沒有夥伴留言給你</p></div>`;
-  if (data.myNotes && data.myNotes.length) msgBlock += `<div class="card"><b>💌 你寫給自己的話</b>${bubbles(data.myNotes)}</div>`;
+  if (data.myNotes && data.myNotes.length) {
+    const nextStr = (q) => { let y = qYear(q); let n = qNum(q); if (n === 4) { y += 1; n = 1; } else { n += 1; } return `${y}-Q${n}`; };
+    const notes = data.myNotes.slice().sort((a, b) => qSortKey(b.quarter) - qSortKey(a.quarter)); // 新到舊
+    const cur = introQuarter();
+    const curStr = `${cur.year}-Q${cur.q}`;
+    // 優先顯示「上一季寫給這一季」的那則；找不到就顯示最新一則
+    let idx = notes.findIndex((m) => nextStr(m.quarter) === curStr);
+    if (idx < 0) idx = 0;
+    const noteCard = (m) => `<div class="msgbubble"><div class="muted" style="font-size:.85em;margin-bottom:4px">📅 ${qLabel(m.quarter)}的你，寫給 ${qLabel(nextStr(m.quarter))}的你</div>${escapeHtml(m.msg)}</div>`;
+    let inner = noteCard(notes[idx]);
+    const rest = notes.filter((_, i) => i !== idx);
+    if (rest.length) {
+      inner += `<details style="margin-top:6px"><summary class="muted" style="cursor:pointer">查看其他季度寫給自己的話（${rest.length}）</summary>${rest.map(noteCard).join('')}</details>`;
+    }
+    msgBlock += `<div class="card"><b>💌 你寫給自己的話</b>${inner}</div>`;
+  }
 
   if (!quarters.length) {
     pane.innerHTML = `${pendingNote}${msgBlock}<div class="msg">目前尚無可查詢的成績。</div>`;
