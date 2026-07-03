@@ -455,15 +455,17 @@ async function renderScores() {
     const adj = adjByQ.get(q) || {};
     return att + (adj.attitudeAdjust || 0) + (perf === null ? 0 : perf + (adj.performanceAdjust || 0));
   };
-  const hasAdjust = quarters.some((q) => { const a = adjByQ.get(q); return a && (a.attitudeAdjust || a.performanceAdjust); });
   const rows = quarters.map((q, i) => {
     const att = sumItems(byQuarter[q].att);
     const perf = sumItems(byQuarter[q].perf);
+    const adj = adjByQ.get(q) || {};
+    const adjVal = att === null ? null : (adj.attitudeAdjust || 0) + (perf === null ? 0 : (adj.performanceAdjust || 0));
+    const adjText = adjVal ? (adjVal > 0 ? `+${round1(adjVal)}` : `${round1(adjVal)}`) : '—';
     const total = qTotal(q);
     const prevTotal = i > 0 ? qTotal(quarters[i - 1]) : null;
-    return `<tr><td>${qLabel(q)}</td><td>${numText(att)}</td><td>${perf === null ? '未計' : numText(perf)}</td><td><b>${numText(total)}</b></td><td>${diffText(total, prevTotal)}</td></tr>`;
+    return `<tr><td>${qLabel(q)}</td><td>${numText(att)}</td><td>${perf === null ? '未計' : numText(perf)}</td><td>${adjText}</td><td><b>${numText(total)}</b></td><td>${diffText(total, prevTotal)}</td></tr>`;
   }).join('');
-  const table = `<div class="card"><b>各季小計</b>（實際分數已含自評${hasAdjust ? '與主管調整' : ''}）<table><tr><th>季度</th><th>職能態度總分</th><th>職能表現總分</th><th>實際分數</th><th>與上季</th></tr>${rows}</table></div>`;
+  const table = `<div class="card"><b>各季小計</b>（實際分數已含自評與主管調整）<table><tr><th>季度</th><th>職能態度總分</th><th>職能表現總分</th><th>主管調整</th><th>實際分數</th><th>與上季</th></tr>${rows}</table></div>`;
 
   const curQ = quarters[quarters.length - 1];
   const prevQ = quarters.length >= 2 ? quarters[quarters.length - 2] : null;
