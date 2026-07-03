@@ -88,6 +88,33 @@ function readAccounts() {
     .filter((r) => r[0] && r[4]) // 有姓名且啟用
     .map((r) => ({ name: r[0], role: r[1], account: String(r[2]), password: String(r[3]) }));
 }
+// 時薪級距：獨立分頁「時薪級距」（分數區間｜時薪），直接編輯試算表即可改，毋須動程式。
+// 分頁不存在時自動建立並填入預設八級距。純數字的時薪欄會自動補「元」。
+function readWageTiers() {
+  let sh = ss().getSheetByName('時薪級距');
+  if (!sh) {
+    try {
+      sh = ss().insertSheet('時薪級距');
+      sh.getRange(1, 1, 1, 2).setValues([['分數區間', '時薪']]);
+      const seed = [
+        ['96 分以上', '340 元'], ['91～95 分', '300 元'], ['86～90 分', '280 元'],
+        ['81～85 分', '230 元'], ['76～80 分', '220 元'], ['71～75 分', '210 元'],
+        ['66～70 分', '205 元'], ['65 分以下', '法定時薪'],
+      ];
+      sh.getRange(2, 1, seed.length, 2).setValues(seed);
+    } catch (e) { sh = ss().getSheetByName('時薪級距'); } // 併發建立時讓後到者直接讀
+  }
+  if (!sh) return [];
+  const v = sh.getDataRange().getValues();
+  const tiers = [];
+  for (let i = 1; i < v.length; i++) {
+    if (v[i][0] === '' || v[i][0] === null) continue;
+    const w = v[i][1];
+    tiers.push([String(v[i][0]), typeof w === 'number' ? w + ' 元' : String(w || '')]);
+  }
+  return tiers;
+}
+
 function publicConfig() {
   return {
     quarter: rng('CFG_quarter').getValue(),
@@ -98,6 +125,7 @@ function publicConfig() {
       ftAttitude: readBank('CFG_ft_attitude'),
       ftPerf: readBank('CFG_ft_perf'),
     },
+    wageTiers: readWageTiers(),
   };
 }
 function checkPass(pass) { return String(pass) === String(rng('CFG_passcode').getValue()); }

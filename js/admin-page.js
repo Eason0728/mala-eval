@@ -177,9 +177,11 @@ function renderDetail(ratee) {
       try {
         const res = await submitSupervisorPerf({ type: 'supervisorPerf', passcode: PASS, quarter: CURRENT_Q, ratee, scores });
         if (!res.ok) throw new Error();
+      } catch { msg.textContent = '儲存失敗，請重試'; btn.disabled = false; return; }
+      try {
         await reload(); renderDetail(ratee);
         document.getElementById('perfMsg').textContent = '✅ 已儲存';
-      } catch { msg.textContent = '儲存失敗，請重試'; btn.disabled = false; }
+      } catch { msg.textContent = '✅ 已儲存（畫面更新失敗，請重新整理）'; btn.disabled = false; }
     };
   }
   document.getElementById('saveFb').onclick = async () => {
@@ -192,9 +194,11 @@ function renderDetail(ratee) {
         text: document.getElementById('fbText').value,
       });
       if (!res.ok) throw new Error();
+    } catch { msg.textContent = '儲存失敗，請重試'; btn.disabled = false; return; }
+    try {
       await reload(); renderDetail(ratee);
       document.getElementById('fbMsg').textContent = '✅ 已儲存';
-    } catch { msg.textContent = '儲存失敗，請重試'; btn.disabled = false; }
+    } catch { msg.textContent = '✅ 已儲存（畫面更新失敗，請重新整理）'; btn.disabled = false; }
   };
   document.getElementById('saveAdj').onclick = async () => {
     const payload = {
@@ -210,9 +214,11 @@ function renderDetail(ratee) {
     try {
       const res = await submitAdjust(payload);
       if (!res.ok) throw new Error();
+    } catch { msg.textContent = '儲存失敗，請重試'; btn.disabled = false; return; }
+    try {
       await reload(); renderDetail(ratee);
       document.getElementById('adjMsg').textContent = '✅ 已儲存';
-    } catch { msg.textContent = '儲存失敗，請重試'; btn.disabled = false; }
+    } catch { msg.textContent = '✅ 已儲存（畫面更新失敗，請重新整理）'; btn.disabled = false; }
   };
 }
 

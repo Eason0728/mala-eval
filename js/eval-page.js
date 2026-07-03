@@ -460,7 +460,9 @@ async function renderScores() {
     const perf = sumItems(byQuarter[q].perf);
     const adj = adjByQ.get(q) || {};
     const adjVal = att === null ? null : (adj.attitudeAdjust || 0) + (perf === null ? 0 : (adj.performanceAdjust || 0));
-    const adjText = adjVal ? (adjVal > 0 ? `+${round1(adjVal)}` : `${round1(adjVal)}`) : '—';
+    // 有調整就顯示數字（正負抵銷為 0 也顯示 0），完全沒調整才顯示 —
+    const hasAdj = att !== null && ((adj.attitudeAdjust || 0) !== 0 || (perf !== null && (adj.performanceAdjust || 0) !== 0));
+    const adjText = hasAdj ? (adjVal > 0 ? `+${round1(adjVal)}` : `${round1(adjVal)}`) : '—';
     const total = qTotal(q);
     const prevTotal = i > 0 ? qTotal(quarters[i - 1]) : null;
     return `<tr><td>${qLabel(q)}</td><td>${numText(att)}</td><td>${perf === null ? '未計' : numText(perf)}</td><td>${adjText}</td><td><b>${numText(total)}</b></td><td>${diffText(total, prevTotal)}</td></tr>`;
@@ -485,15 +487,18 @@ async function renderScores() {
     selfCompare = compareBlock(`自評 vs 他評（${qLabel(curQ)}）`, selfItems.map((x) => x.label), peerItems, selfItems, '他評', '自評');
   }
 
-  // 分數落點 → 時薪對照（計時適用）
+  // 分數落點 → 時薪對照（計時適用）。級距來自試算表「時薪級距」分頁（config.wageTiers）；
+  // 後端尚未回傳時用內建預設，避免空窗。
   let wageTable = '';
   if (data.role === '計時') {
-    const tiers = [
+    const DEFAULT_TIERS = [
       ['96 分以上', '340 元'], ['91～95 分', '300 元'], ['86～90 分', '280 元'],
       ['81～85 分', '230 元'], ['76～80 分', '220 元'], ['71～75 分', '210 元'],
       ['66～70 分', '205 元'], ['65 分以下', '法定時薪'],
     ];
-    wageTable = `<div class="card"><b>💰 分數落點時薪對照</b><table><tr><th>實際分數</th><th>時薪</th></tr>${tiers.map(([r, w]) => `<tr><td>${r}</td><td>${w}</td></tr>`).join('')}</table></div>`;
+    const tiers = (state.config && Array.isArray(state.config.wageTiers) && state.config.wageTiers.length)
+      ? state.config.wageTiers : DEFAULT_TIERS;
+    wageTable = `<div class="card"><b>💰 分數落點時薪對照</b><table><tr><th>實際分數</th><th>時薪</th></tr>${tiers.map(([r, w]) => `<tr><td>${escapeHtml(r)}</td><td>${escapeHtml(w)}</td></tr>`).join('')}</table></div>`;
   }
 
   pane.innerHTML = pendingNote + msgBlock + table + selfCompare + trend + wageTable;
