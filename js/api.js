@@ -29,6 +29,7 @@ export function submitPeer(payload) { return postJSON(payload); }
 export function submitSelf(payload) { return postJSON(payload); }
 export function submitSupervisorPerf(payload) { return postJSON(payload); }
 export function submitAdjust(payload) { return postJSON(payload); }
+export function submitSupervisorFeedback(payload) { return postJSON(payload); }
 
 export async function fetchAdminData(passcode, quarter) {
   const url = `${APPS_SCRIPT_URL}?action=adminData`

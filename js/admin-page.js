@@ -1,4 +1,4 @@
-import { fetchAdminData, submitAdjust, submitSupervisorPerf } from './api.js';
+import { fetchAdminData, submitAdjust, submitSupervisorPerf, submitSupervisorFeedback } from './api.js';
 import { round1, raterTotal, averageTotals, finalScore } from './scoring.js';
 
 let DATA = null;
@@ -141,6 +141,8 @@ function renderDetail(ratee) {
       </div>`).join('')}
       <button id="savePerf">儲存表現評分</button> <span id="perfMsg" class="muted"></span></div>`;
   }
+  const fbRow = (DATA.supervisorFeedback || []).find((f) => f.ratee === ratee);
+  const fb = fbRow ? fbRow.text : '';
   const selfAtt = (DATA.selfRecords || []).find((s) => s.ratee === ratee && s.category === '態度');
   const selfPerf = (DATA.selfRecords || []).find((s) => s.ratee === ratee && s.category === '表現');
   const selfLine = (selfAtt || selfPerf)
@@ -158,6 +160,11 @@ function renderDetail(ratee) {
       表現 ± <input id="pAdj" type="number" value="${adj.performanceAdjust || 0}" style="width:70px">
       原因 <input id="pRsn" value="${adj.performanceReason || ''}"><br><br>
       <button id="saveAdj">儲存調整</button> <span id="adjMsg" class="muted"></span>
+    </div>
+    <div class="card">
+      <div><b>當季表現回饋</b> <span class="muted">（會顯示在這位同仁的「我的成績」，重存即覆蓋）</span></div>
+      <textarea id="fbText" rows="3" style="width:100%">${esc(fb)}</textarea><br>
+      <button id="saveFb">儲存回饋</button> <span id="fbMsg" class="muted"></span>
     </div>`;
 
   if (row.role === '正職') {
@@ -172,6 +179,17 @@ function renderDetail(ratee) {
       } catch { msg.textContent = '儲存失敗，請重試'; }
     };
   }
+  document.getElementById('saveFb').onclick = async () => {
+    const msg = document.getElementById('fbMsg');
+    try {
+      const res = await submitSupervisorFeedback({
+        type: 'supervisorFeedback', passcode: PASS, quarter: CURRENT_Q, ratee,
+        text: document.getElementById('fbText').value,
+      });
+      if (!res.ok) throw new Error();
+      msg.textContent = '已儲存'; await reload(); renderDetail(ratee);
+    } catch { msg.textContent = '儲存失敗，請重試'; }
+  };
   document.getElementById('saveAdj').onclick = async () => {
     const payload = {
       type: 'adjust', passcode: PASS, quarter: CURRENT_Q, ratee,

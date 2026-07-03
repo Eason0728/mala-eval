@@ -403,26 +403,43 @@ async function renderScores() {
     quarters = quarters.filter((q) => q !== t.quarter);
     pendingNote = `<div class="msg">📌 ${qLabel(t.quarter)} 的成績於 ${t.fillMonth} 月 10 號後開放查詢。</div>`;
   }
-  const bubbles = (arr) => arr.map((m) => `<div class="msgbubble">${escapeHtml(m.msg)}</div>`).join('');
   let msgBlock = '';
-  if (data.messagesToMe && data.messagesToMe.length) msgBlock += `<div class="card"><b>💬 夥伴對你說的話（匿名）</b>${bubbles(data.messagesToMe)}</div>`;
-  else msgBlock += `<div class="card"><b>💬 夥伴對你說的話（匿名）</b><p class="muted">這一季還沒有夥伴留言給你</p></div>`;
-  if (data.myNotes && data.myNotes.length) {
-    const nextStr = (q) => { let y = qYear(q); let n = qNum(q); if (n === 4) { y += 1; n = 1; } else { n += 1; } return `${y}-Q${n}`; };
-    const notes = data.myNotes.slice().sort((a, b) => qSortKey(b.quarter) - qSortKey(a.quarter)); // 新到舊
-    const cur = introQuarter();
-    const curStr = `${cur.year}-Q${cur.q}`;
-    // 優先顯示「上一季寫給這一季」的那則；找不到就顯示最新一則
-    let idx = notes.findIndex((m) => nextStr(m.quarter) === curStr);
+  // 分季呈現：凸顯一則（優先符合條件者，否則最新），其餘收合
+  const featuredBlock = (list, title, isFeatured, bubbleOf, moreLabel) => {
+    if (!list || !list.length) return '';
+    const items = list.slice().sort((a, b) => qSortKey(b.quarter) - qSortKey(a.quarter)); // 新到舊
+    let idx = items.findIndex(isFeatured);
     if (idx < 0) idx = 0;
-    const noteCard = (m) => `<div class="msgbubble"><div class="muted" style="font-size:.85em;margin-bottom:4px">📅 ${qLabel(m.quarter)}的你，寫給 ${qLabel(nextStr(m.quarter))}的你</div>${escapeHtml(m.msg)}</div>`;
-    let inner = noteCard(notes[idx]);
-    const rest = notes.filter((_, i) => i !== idx);
-    if (rest.length) {
-      inner += `<details style="margin-top:6px"><summary class="muted" style="cursor:pointer">查看其他季度寫給自己的話（${rest.length}）</summary>${rest.map(noteCard).join('')}</details>`;
-    }
-    msgBlock += `<div class="card"><b>💌 你寫給自己的話</b>${inner}</div>`;
-  }
+    let inner = bubbleOf(items[idx]);
+    const rest = items.filter((_, i) => i !== idx);
+    if (rest.length) inner += `<details style="margin-top:6px"><summary class="muted" style="cursor:pointer">${moreLabel}（${rest.length}）</summary>${rest.map(bubbleOf).join('')}</details>`;
+    return `<div class="card"><b>${title}</b>${inner}</div>`;
+  };
+  const cur = introQuarter();
+  const curStr = `${cur.year}-Q${cur.q}`;
+  const nextStr = (q) => { let y = qYear(q); let n = qNum(q); if (n === 4) { y += 1; n = 1; } else { n += 1; } return `${y}-Q${n}`; };
+  // 夥伴留言：本季全部展開，舊季收合（每則標季度）
+  const toMe = (data.messagesToMe || []).slice().sort((a, b) => qSortKey(b.quarter) - qSortKey(a.quarter));
+  const curMsgs = toMe.filter((m) => m.quarter === curStr);
+  const oldMsgs = toMe.filter((m) => m.quarter !== curStr);
+  const qBubble = (m) => `<div class="msgbubble"><div class="muted" style="font-size:.85em;margin-bottom:4px">📅 ${qLabel(m.quarter)}</div>${escapeHtml(m.msg)}</div>`;
+  let toMeInner = curMsgs.length
+    ? curMsgs.map((m) => `<div class="msgbubble">${escapeHtml(m.msg)}</div>`).join('')
+    : '<p class="muted">這一季還沒有夥伴留言給你</p>';
+  if (oldMsgs.length) toMeInner += `<details style="margin-top:6px"><summary class="muted" style="cursor:pointer">查看其他季度的留言（${oldMsgs.length}）</summary>${oldMsgs.map(qBubble).join('')}</details>`;
+  msgBlock += `<div class="card"><b>💬 夥伴對你說的話（匿名）</b>${toMeInner}</div>`;
+  msgBlock += featuredBlock(
+    data.myNotes, '💌 你寫給自己的話',
+    (m) => nextStr(m.quarter) === curStr, // 優先「上一季寫給這一季」
+    (m) => `<div class="msgbubble"><div class="muted" style="font-size:.85em;margin-bottom:4px">📅 ${qLabel(m.quarter)}的你，寫給 ${qLabel(nextStr(m.quarter))}的你</div>${escapeHtml(m.msg)}</div>`,
+    '查看其他季度寫給自己的話',
+  );
+  msgBlock += featuredBlock(
+    data.supervisorFeedback, '📋 主管給你的表現回饋',
+    (m) => m.quarter === curStr, // 優先當季
+    (m) => `<div class="msgbubble"><div class="muted" style="font-size:.85em;margin-bottom:4px">📅 ${qLabel(m.quarter)}</div>${escapeHtml(m.msg)}</div>`,
+    '查看其他季度的表現回饋',
+  );
 
   if (!quarters.length) {
     pane.innerHTML = `${pendingNote}${msgBlock}<div class="msg">目前尚無可查詢的成績。</div>`;
@@ -457,7 +474,18 @@ async function renderScores() {
     selfCompare = compareBlock(`自評 vs 他評（${qLabel(curQ)}）`, selfItems.map((x) => x.label), peerItems, selfItems, '他評', '自評');
   }
 
-  pane.innerHTML = pendingNote + msgBlock + table + selfCompare + trend;
+  // 分數落點 → 時薪對照（計時適用）
+  let wageTable = '';
+  if (data.role === '計時') {
+    const tiers = [
+      ['96 分以上', '340 元'], ['91～95 分', '300 元'], ['86～90 分', '280 元'],
+      ['81～85 分', '230 元'], ['76～80 分', '220 元'], ['71～75 分', '210 元'],
+      ['66～70 分', '205 元'], ['65 分以下', '法定時薪'],
+    ];
+    wageTable = `<div class="card"><b>💰 分數落點時薪對照</b><table><tr><th>實際分數</th><th>時薪</th></tr>${tiers.map(([r, w]) => `<tr><td>${r}</td><td>${w}</td></tr>`).join('')}</table></div>`;
+  }
+
+  pane.innerHTML = pendingNote + msgBlock + table + selfCompare + trend + wageTable;
 }
 
 // ===== 分頁切換 =====

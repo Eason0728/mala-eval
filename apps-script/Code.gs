@@ -196,6 +196,23 @@ function handleAdjust(p) {
   return { ok: true };
 }
 
+// p: { type:'supervisorFeedback', passcode, quarter, ratee, text }
+// 主管回饋：每季每人一則，重存即覆蓋。分頁不存在會自動建立。
+function handleSupervisorFeedback(p) {
+  if (!checkPass(p.passcode)) return { ok: false, reason: 'unauthorized' };
+  let sh = ss().getSheetByName('主管回饋');
+  if (!sh) {
+    sh = ss().insertSheet('主管回饋');
+    sh.getRange(1, 1, 1, 4).setValues([['季度', '受評者', '內容', '更新時間']]);
+  }
+  const v = sh.getDataRange().getValues();
+  let rowIdx = -1;
+  for (let i = 1; i < v.length; i++) if (v[i][0] === p.quarter && v[i][1] === p.ratee) { rowIdx = i + 1; break; }
+  const row = [p.quarter, p.ratee, String(p.text || ''), new Date()];
+  if (rowIdx === -1) sh.appendRow(row); else sh.getRange(rowIdx, 1, 1, row.length).setValues([row]);
+  return { ok: true };
+}
+
 function readAdminData(passcode, quarter) {
   if (!checkPass(passcode)) return { error: 'unauthorized' };
   const rec = ss().getSheetByName('評分紀錄').getDataRange().getValues();
@@ -255,7 +272,16 @@ function readAdminData(passcode, quarter) {
       if (mv[i][1] === quarter && mv[i][3] === '公司') companyMessages.push(mv[i][5]);
     }
   }
-  return { config: publicConfig(), peerRecords, supervisorPerf, adjustments, results, selfRecords, companyMessages };
+  // 主管回饋（本季）
+  const fbSh = ss().getSheetByName('主管回饋');
+  const supervisorFeedback = [];
+  if (fbSh) {
+    const fv = fbSh.getDataRange().getValues();
+    for (let i = 1; i < fv.length; i++) {
+      if (fv[i][0] === quarter) supervisorFeedback.push({ ratee: fv[i][1], text: fv[i][2] });
+    }
+  }
+  return { config: publicConfig(), peerRecords, supervisorPerf, adjustments, results, selfRecords, companyMessages, supervisorFeedback };
 }
 
 function doGet(e) {
@@ -277,6 +303,7 @@ function doPost(e) {
     if (p.type === 'self') return jsonOut(handleSelf(p));
     if (p.type === 'supervisorPerf') return jsonOut(handleSupervisorPerf(p));
     if (p.type === 'adjust') return jsonOut(handleAdjust(p));
+    if (p.type === 'supervisorFeedback') return jsonOut(handleSupervisorFeedback(p));
     return jsonOut({ ok: false, reason: 'unknown type' });
   } finally {
     lock.releaseLock();
@@ -390,7 +417,16 @@ function handleMyScores(p) {
       if (mv[i][3] === '自己' && mv[i][2] === name) myNotes.push({ quarter: mv[i][1], msg: mv[i][5] });
     }
   }
-  return { ok: true, name, role: acc.role, records, supervisorPerf, seeded: readResultDetail(name), self, messagesToMe, myNotes };
+  // 主管給我的表現回饋（各季）
+  const fbSh = ss().getSheetByName('主管回饋');
+  const supervisorFeedback = [];
+  if (fbSh) {
+    const fv = fbSh.getDataRange().getValues();
+    for (let i = 1; i < fv.length; i++) {
+      if (fv[i][1] === name && String(fv[i][2] || '').trim()) supervisorFeedback.push({ quarter: fv[i][0], msg: fv[i][2] });
+    }
+  }
+  return { ok: true, name, role: acc.role, records, supervisorPerf, seeded: readResultDetail(name), self, messagesToMe, myNotes, supervisorFeedback };
 }
 
 // ====== 一次性：建立某季「結果細項」空白模板供手動填分（如第一季歷史資料）======
