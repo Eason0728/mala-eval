@@ -31,15 +31,19 @@
         </details>
         <div class="hellobar">
           <span id="hello" class="muted"></span>
-          <details id="pwBox" class="pwbox">
-            <summary>🔑 修改密碼</summary>
-            <div class="card pwcard">
-              <label>新密碼 <input id="newPw" type="password" autocomplete="new-password" /></label><br /><br />
-              <label>確認新密碼 <input id="newPw2" type="password" autocomplete="new-password" /></label><br /><br />
-              <button id="savePw">儲存</button>
-              <span id="pwMsg" class="muted"></span>
-            </div>
-          </details>
+          <div class="hellobar-actions">
+            <details id="pwBox" class="pwbox">
+              <summary>🔑 修改密碼</summary>
+              <div class="card pwcard">
+                <label>新密碼 <input id="newPw" type="password" autocomplete="new-password" /></label><br /><br />
+                <label>確認新密碼 <input id="newPw2" type="password" autocomplete="new-password" /></label><br /><br />
+                <button id="savePw">儲存</button>
+                <span id="pwMsg" class="muted"></span>
+              </div>
+            </details>
+            <span class="hb-sep">｜</span>
+            <button id="btnLogout" class="linkbtn">↩ 登出</button>
+          </div>
         </div>
         <div class="tabs">
           <button id="btnFill" class="tab active">填寫評鑑</button>

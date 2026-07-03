@@ -15,7 +15,7 @@ export function validatePeerSubmission(ratings, ctx) {
     if (!validScores(r.attitude, ctx.attitudeCounts[role])) {
       errors.push(`「${name}」的態度評分尚未完成`);
     }
-    const needPerf = role === '計時' && ctx.raterRole === '正職';
+    const needPerf = role === '計時'; // 計時的表現全員互評（2026-07 起）
     if (needPerf && !validScores(r.performance, ctx.perfCounts['計時'])) {
       errors.push(`「${name}」的表現評分尚未完成`);
     }

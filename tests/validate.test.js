@@ -39,13 +39,22 @@ test('正職評核者：計時表現未填滿 → 報錯', () => {
   assert.ok(validatePeerSubmission(ratings, ctx).some((e) => e.includes('計時A') && e.includes('表現')));
 });
 
-test('計時評核者：不需填任何表現 → 通過', () => {
+test('計時評核者：計時同樣需態度+表現（全員互評）→ 通過', () => {
+  const ctxPt = { ...ctx, raterRole: '計時' };
+  const ratings = [
+    { ratee: '計時A', attitude: [5, 4, 3], performance: [5, 5, 4, 4] },
+    { ratee: '正職B', attitude: [4, 5], performance: null },
+  ];
+  assert.deepEqual(validatePeerSubmission(ratings, ctxPt), []);
+});
+
+test('計時評核者：計時表現未填 → 報錯', () => {
   const ctxPt = { ...ctx, raterRole: '計時' };
   const ratings = [
     { ratee: '計時A', attitude: [5, 4, 3], performance: null },
     { ratee: '正職B', attitude: [4, 5], performance: null },
   ];
-  assert.deepEqual(validatePeerSubmission(ratings, ctxPt), []);
+  assert.ok(validatePeerSubmission(ratings, ctxPt).some((e) => e.includes('計時A') && e.includes('表現')));
 });
 
 test('分數超出 1–5 → 報錯', () => {

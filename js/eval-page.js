@@ -143,7 +143,7 @@ function catBlock(label, items, values, open, onSave) {
 // ===== 他評（填寫評鑑）=====
 function rateeCard(r, draft) {
   const attitudeItems = bankFor(r.role, 'attitude');
-  const showPerf = r.role === '計時' && state.me.role === '正職';
+  const showPerf = r.role === '計時'; // 計時的表現全員互評（2026-07 起）
   const perfItems = showPerf ? bankFor('計時', 'perf') : [];
   const entry = {
     rateeRole: r.role,
@@ -511,6 +511,7 @@ document.getElementById('btnFill').onclick = () => switchTab('fill');
 document.getElementById('btnSelf').onclick = () => switchTab('self');
 document.getElementById('btnMyScores').onclick = () => switchTab('scores');
 document.getElementById('addPeerMsg').onclick = () => addPeerRow();
+document.getElementById('btnLogout').onclick = () => window.location.reload(); // 回登入頁
 
 document.getElementById('savePw').onclick = async () => {
   const msg = document.getElementById('pwMsg');

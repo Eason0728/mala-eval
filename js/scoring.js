@@ -39,7 +39,7 @@ export function finalScore({ attitude, attitudeAdjust = 0, performance = null, p
   return { score: attitudePart + performance + performanceAdjust, performanceCounted: true };
 }
 
-// 組合單一受評者完整結果。計時表現=正職互評平均；正職表現=主管單一評分。
+// 組合單一受評者完整結果。計時表現=全員互評平均；正職表現=主管單一評分。
 export function aggregateRatee({
   ratee, role, attitudeTotals = [], performanceTotals = [], supervisorPerf = null, adjustment = {},
 }) {

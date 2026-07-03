@@ -74,7 +74,7 @@ function buildRows() {
     let attitude = averageTotals(attList);
     let attManual = false;
     if (attitude === null && seedAtt.has(a.name)) { attitude = seedAtt.get(a.name); attManual = true; }
-    // 表現：正職=主管評分；計時=正職互評平均；皆無則用手動填
+    // 表現：正職=主管評分；計時=全員互評平均；皆無則用手動填
     let performance = a.role === '正職' ? (spBy.has(a.name) ? spBy.get(a.name) : null) : averageTotals(perfList);
     let perfManual = false;
     if ((performance === null || performance === undefined) && seedPerf.has(a.name)) { performance = seedPerf.get(a.name); perfManual = true; }

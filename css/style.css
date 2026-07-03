@@ -124,6 +124,10 @@ details.help div { font-size: 13px; color: #7c6f68; margin: 2px 0; }
 
 /* 姓名列 + 修改密碼（右側小連結，點開浮出表單） */
 .hellobar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 6px 0 4px; }
+.hellobar-actions { display: flex; align-items: center; gap: 10px; }
+.hb-sep { color: var(--line); user-select: none; }
+.linkbtn { background: none; border: 0; box-shadow: none; padding: 0; color: var(--brand); font-weight: 700; font-size: inherit; cursor: pointer; white-space: nowrap; }
+.linkbtn:hover { background: none; text-decoration: underline; }
 .pwbox { position: relative; }
 .pwbox > summary { cursor: pointer; color: var(--brand); font-weight: 700; white-space: nowrap; list-style: none; }
 .pwbox > summary::-webkit-details-marker { display: none; }
