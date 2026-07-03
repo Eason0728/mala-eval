@@ -170,25 +170,31 @@ function renderDetail(ratee) {
   if (row.role === '正職') {
     document.getElementById('savePerf').onclick = async () => {
       const scores = [...document.querySelectorAll('[data-perf]')].map((s) => Number(s.value));
+      const btn = document.getElementById('savePerf');
       const msg = document.getElementById('perfMsg');
       if (scores.some((v) => !v)) { msg.textContent = '請為每一項評分'; return; }
+      btn.disabled = true; msg.textContent = '儲存中…';
       try {
         const res = await submitSupervisorPerf({ type: 'supervisorPerf', passcode: PASS, quarter: CURRENT_Q, ratee, scores });
         if (!res.ok) throw new Error();
-        msg.textContent = '已儲存'; await reload(); renderDetail(ratee);
-      } catch { msg.textContent = '儲存失敗，請重試'; }
+        await reload(); renderDetail(ratee);
+        document.getElementById('perfMsg').textContent = '✅ 已儲存';
+      } catch { msg.textContent = '儲存失敗，請重試'; btn.disabled = false; }
     };
   }
   document.getElementById('saveFb').onclick = async () => {
+    const btn = document.getElementById('saveFb');
     const msg = document.getElementById('fbMsg');
+    btn.disabled = true; msg.textContent = '儲存中…';
     try {
       const res = await submitSupervisorFeedback({
         type: 'supervisorFeedback', passcode: PASS, quarter: CURRENT_Q, ratee,
         text: document.getElementById('fbText').value,
       });
       if (!res.ok) throw new Error();
-      msg.textContent = '已儲存'; await reload(); renderDetail(ratee);
-    } catch { msg.textContent = '儲存失敗，請重試'; }
+      await reload(); renderDetail(ratee);
+      document.getElementById('fbMsg').textContent = '✅ 已儲存';
+    } catch { msg.textContent = '儲存失敗，請重試'; btn.disabled = false; }
   };
   document.getElementById('saveAdj').onclick = async () => {
     const payload = {
@@ -198,12 +204,15 @@ function renderDetail(ratee) {
       performanceAdjust: Number(document.getElementById('pAdj').value) || 0,
       performanceReason: document.getElementById('pRsn').value,
     };
+    const btn = document.getElementById('saveAdj');
     const msg = document.getElementById('adjMsg');
+    btn.disabled = true; msg.textContent = '儲存中…';
     try {
       const res = await submitAdjust(payload);
       if (!res.ok) throw new Error();
-      msg.textContent = '已儲存'; await reload(); renderDetail(ratee);
-    } catch { msg.textContent = '儲存失敗，請重試'; }
+      await reload(); renderDetail(ratee);
+      document.getElementById('adjMsg').textContent = '✅ 已儲存';
+    } catch { msg.textContent = '儲存失敗，請重試'; btn.disabled = false; }
   };
 }
 
@@ -249,7 +258,7 @@ document.getElementById('enter').onclick = async () => {
 const btnPrint = document.getElementById('btnPrint');
 if (btnPrint) {
   btnPrint.onclick = () => {
-    document.title = `新竹光復店＿績效評核＿${QZH[qNum(CURRENT_Q)]}`;
+    document.title = `新竹光復店＿績效評核＿${String(CURRENT_Q).split('-Q')[0]}年${QZH[qNum(CURRENT_Q)]}`;
     const logo = document.querySelector('.brand-logo');
     const logoSrc = logo ? logo.src : 'assets/logo.png';
     document.getElementById('printHeader').innerHTML =

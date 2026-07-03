@@ -417,6 +417,15 @@ function handleMyScores(p) {
       if (mv[i][3] === '自己' && mv[i][2] === name) myNotes.push({ quarter: mv[i][1], msg: mv[i][5] });
     }
   }
+  // 主管 ± 調整（各季，前端計入實際分數；不回傳原因欄）
+  const adjSh = ss().getSheetByName('主管調整');
+  const adjustments = [];
+  if (adjSh) {
+    const av = adjSh.getDataRange().getValues();
+    for (let i = 1; i < av.length; i++) {
+      if (av[i][1] === name) adjustments.push({ quarter: av[i][0], attitudeAdjust: Number(av[i][2]) || 0, performanceAdjust: Number(av[i][4]) || 0 });
+    }
+  }
   // 主管給我的表現回饋（各季）
   const fbSh = ss().getSheetByName('主管回饋');
   const supervisorFeedback = [];
@@ -426,7 +435,7 @@ function handleMyScores(p) {
       if (fv[i][1] === name && String(fv[i][2] || '').trim()) supervisorFeedback.push({ quarter: fv[i][0], msg: fv[i][2] });
     }
   }
-  return { ok: true, name, role: acc.role, records, supervisorPerf, seeded: readResultDetail(name), self, messagesToMe, myNotes, supervisorFeedback };
+  return { ok: true, name, role: acc.role, records, supervisorPerf, seeded: readResultDetail(name), self, messagesToMe, myNotes, supervisorFeedback, adjustments };
 }
 
 // ====== 一次性：建立某季「結果細項」空白模板供手動填分（如第一季歷史資料）======
