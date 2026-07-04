@@ -1,5 +1,5 @@
 import { login, fetchConfig, submitPeer, submitSelf, myScores, changePassword } from './api.js';
-import { validatePeerSubmission } from './validate.js';
+import { splitPeerSubmission } from './validate.js';
 import { averageItems, round1 } from './scoring.js';
 
 const state = { me: null, auth: null, config: null, ratings: new Map(), fillQuarter: null, self: null, selfQuarter: null };
@@ -580,6 +580,18 @@ document.getElementById('savePw').onclick = async () => {
   btn.disabled = false;
 };
 
+// 送出前的確認小視窗：回傳 true=確定送出、false=回去繼續填
+function askConfirm(html) {
+  return new Promise((resolve) => {
+    const ov = document.getElementById('confirmOverlay');
+    document.getElementById('confirmText').innerHTML = html;
+    ov.style.display = 'flex';
+    const done = (v) => { ov.style.display = 'none'; resolve(v); };
+    document.getElementById('confirmOk').onclick = () => done(true);
+    document.getElementById('confirmCancel').onclick = () => done(false);
+  });
+}
+
 document.getElementById('submit').onclick = async () => {
   if (!state.fillQuarter) return;
   const ratees = state.config.accounts.filter((a) => a.name !== state.me.name);
@@ -593,14 +605,25 @@ document.getElementById('submit').onclick = async () => {
     attitudeCounts: { 計時: state.config.banks.ptAttitude.length, 正職: state.config.banks.ftAttitude.length },
     perfCounts: { 計時: state.config.banks.ptPerf.length },
   };
-  const errs = validatePeerSubmission(ratings, ctx);
+  const { complete, incomplete } = splitPeerSubmission(ratings, ctx);
   const errBox = document.getElementById('errors');
-  if (errs.length) { errBox.style.display = 'block'; errBox.innerHTML = errs.join('<br>'); return; }
+  if (!complete.length) {
+    errBox.style.display = 'block';
+    errBox.textContent = '還沒有任何一位同仁的評分填寫完成，至少要完整評完一位才能送出。';
+    return;
+  }
   errBox.style.display = 'none';
+  const warn = incomplete.length
+    ? `<p>以下同仁的評分還沒填完，這次送出<b>不會包含他們</b>：</p>`
+      + `<p><b>${incomplete.join('、')}</b></p>`
+      + '<p>每人每季只能送出一次，送出後就不能再補評或修改。</p>'
+    : '<p>每人每季只能送出一次，送出後就不能再修改或重填。</p>';
+  const go = await askConfirm(warn + '<p><b>確定要送出嗎？</b></p>');
+  if (!go) return;
   const btn = document.getElementById('submit');
   btn.disabled = true;
   const quarter = state.fillQuarter;
-  const payload = { type: 'peer', quarter, rater: state.me.name, raterRole: state.me.role, note: '', ratings };
+  const payload = { type: 'peer', quarter, rater: state.me.name, raterRole: state.me.role, note: '', ratings: complete };
   try {
     const res = await submitPeer(payload);
     if (res.ok) { clearPeerDraft(quarter); showResult('ok', `已完成 ${qLabel(quarter)} 的評鑑，謝謝你的回饋！`); document.getElementById('forms').style.display = 'none'; }

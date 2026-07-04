@@ -57,7 +57,7 @@
           <p id="fillHint" class="muted">點同仁姓名展開，選「職能態度／職能表現」再點開細項評分。星等說明可展開參考 ⭐️</p>
           <div id="forms"></div>
           <div id="errors" class="msg err" style="display:none"></div>
-          <p class="muted">⚠️ 每人每季只能評分一次，送出後不可更改或重填，請確認都填好再送出。</p>
+          <p class="muted">⚠️ 每人每季只能評分一次，送出後不可更改或重填。還沒填完的同仁不會被計入，送出前會再跟你確認一次。</p>
           <button id="submit">送出評鑑</button>
           <div id="result" class="msg" style="display:none"></div>
         </div>
@@ -113,6 +113,18 @@
       </div>
     </div>
   </div>
+
+  <!-- 送出前確認視窗 -->
+  <div id="confirmOverlay" class="overlay" style="display:none">
+    <div class="confirmbox card">
+      <div id="confirmText"></div>
+      <div class="confirm-actions">
+        <button id="confirmCancel" type="button" class="ghostbtn">回去繼續填</button>
+        <button id="confirmOk" type="button">確定送出</button>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="js/eval-page.js"></script>
   <script type="module" src="js/admin-page.js"></script>
 </body>

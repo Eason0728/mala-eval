@@ -164,3 +164,15 @@ circle.c-cur { fill: var(--brand); }
   #overview table { font-size: 12px; width: 100%; }
   #overview a { color: #000; text-decoration: none; }
 }
+
+/* 送出前確認視窗 */
+.overlay {
+  position: fixed; inset: 0; z-index: 20;
+  background: rgba(36, 26, 21, .45);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.confirmbox { max-width: 420px; width: 100%; margin: 0; box-shadow: 0 12px 32px rgba(36, 26, 21, .3); }
+.confirmbox p { margin: 8px 0; line-height: 1.6; }
+.confirm-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }
+.ghostbtn { background: #fff; color: var(--ink); border: 1px solid var(--line); box-shadow: none; }
+.ghostbtn:hover { background: #f4f4f5; }
