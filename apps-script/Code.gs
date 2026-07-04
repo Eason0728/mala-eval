@@ -115,9 +115,20 @@ function readWageTiers() {
   return tiers;
 }
 
+// 當前評核季度＝依日期（台灣時間）算出的「剛結束的上一季」，與前端 fillTarget 一致。
+// 例：1~3 月＝去年 Q4、4~6 月＝Q1、7~9 月＝Q2、10~12 月＝Q3。
+// 2026-07-04 起取代設定分頁 B1（CFG_quarter），該格保留但不再被讀取。
+function currentQuarter() {
+  const parts = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-M').split('-');
+  const y = Number(parts[0]);
+  const q = Math.ceil(Number(parts[1]) / 3) - 1;
+  return q === 0 ? (y - 1) + '-Q4' : y + '-Q' + q;
+}
+
 function publicConfig() {
   return {
-    quarter: rng('CFG_quarter').getValue(),
+    ver: 8, // 部署版本標記，方便 curl 驗證新版是否生效
+    quarter: currentQuarter(),
     accounts: readAccounts().map((a) => ({ name: a.name, role: a.role })),
     banks: {
       ptAttitude: readBank('CFG_pt_attitude'),
@@ -139,7 +150,7 @@ function alreadySubmitted(quarter, rater) {
 function handleLogin(p) {
   const acc = readAccounts().find((a) => a.account === String(p.account) && a.password === String(p.password));
   if (!acc) return { ok: false, reason: 'invalid' };
-  const quarter = rng('CFG_quarter').getValue();
+  const quarter = currentQuarter();
   return { ok: true, name: acc.name, role: acc.role, quarter, alreadyDone: alreadySubmitted(quarter, acc.name) };
 }
 
