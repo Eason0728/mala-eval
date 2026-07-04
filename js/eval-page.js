@@ -546,6 +546,13 @@ document.getElementById('loginBtn').onclick = async () => {
     renderFill();
     renderSelf();
     switchTab('fill');
+    // 本季已送出過互評 → 收起表格、鎖送出鈕，說明原因
+    if (res.alreadyDone && state.fillQuarter) {
+      clearPeerDraft(state.fillQuarter);
+      document.getElementById('forms').style.display = 'none';
+      document.getElementById('submit').disabled = true;
+      showResult('ok', `你已經送出過 ${qLabel(state.fillQuarter)} 的評鑑，謝謝！每人每季只能送出一次，無法再修改或重填。`);
+    }
   } catch {
     errBox.style.display = 'block'; errBox.textContent = '連線失敗，請稍後再試';
   }
@@ -627,7 +634,7 @@ document.getElementById('submit').onclick = async () => {
   try {
     const res = await submitPeer(payload);
     if (res.ok) { clearPeerDraft(quarter); showResult('ok', `已完成 ${qLabel(quarter)} 的評鑑，謝謝你的回饋！`); document.getElementById('forms').style.display = 'none'; }
-    else if (res.reason === 'duplicate') { clearPeerDraft(quarter); showResult('ok', `你已經評過 ${qLabel(quarter)} 了，謝謝！`); btn.disabled = false; }
+    else if (res.reason === 'duplicate') { clearPeerDraft(quarter); showResult('ok', `你已經評過 ${qLabel(quarter)} 了，謝謝！`); document.getElementById('forms').style.display = 'none'; }
     else { throw new Error('rejected'); }
   } catch { showResult('err', '送出失敗，請稍後再試一次'); btn.disabled = false; }
 };
