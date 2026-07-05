@@ -127,7 +127,7 @@ function currentQuarter() {
 
 function publicConfig() {
   return {
-    ver: 9, // 部署版本標記，方便 curl 驗證新版是否生效
+    ver: 10, // 部署版本標記，方便 curl 驗證新版是否生效
     quarter: currentQuarter(),
     accounts: readAccounts().map((a) => ({ name: a.name, role: a.role })),
     banks: {
@@ -311,7 +311,8 @@ function readAdminData(passcode, quarter) {
   if (msgSh) {
     const mv = msgSh.getDataRange().getValues();
     for (let i = 1; i < mv.length; i++) {
-      if (mv[i][1] === quarter && mv[i][3] === '公司') companyMessages.push(mv[i][5]);
+      // 主管端要看是誰寫的（發話者欄一直有記錄）；同仁端不受影響、仍當匿名。
+      if (mv[i][1] === quarter && mv[i][3] === '公司') companyMessages.push({ msg: mv[i][5], from: mv[i][2] });
     }
   }
   // 主管回饋（本季）

@@ -106,7 +106,14 @@ function renderCompany() {
   const host = document.getElementById('companyMsgs');
   if (!host) return;
   host.style.display = msgs.length ? '' : 'none';
-  host.innerHTML = msgs.length ? `<b>💬 對公司的話（匿名）</b>${msgs.map((m) => `<div class="msgbubble">${esc(m)}</div>`).join('')}` : '';
+  // 主管端顯示發話者（同仁端仍當匿名寫）。相容舊後端：m 為字串時無名字。
+  const bubble = (m) => {
+    const msg = typeof m === 'string' ? m : (m.msg || '');
+    const from = typeof m === 'string' ? '' : (m.from || '');
+    const name = from ? `<div class="muted" style="font-size:.85em;margin-top:4px;text-align:right">— ${esc(from)}</div>` : '';
+    return `<div class="msgbubble">${esc(msg)}${name}</div>`;
+  };
+  host.innerHTML = msgs.length ? `<b>💬 對公司的話</b>${msgs.map(bubble).join('')}` : '';
 }
 
 function renderOverview(rows) {
