@@ -127,7 +127,7 @@ function currentQuarter() {
 
 function publicConfig() {
   return {
-    ver: 8, // 部署版本標記，方便 curl 驗證新版是否生效
+    ver: 9, // 部署版本標記，方便 curl 驗證新版是否生效
     quarter: currentQuarter(),
     accounts: readAccounts().map((a) => ({ name: a.name, role: a.role })),
     banks: {
@@ -182,16 +182,19 @@ function writeSelfMessages(quarter, person, p) {
   let sh = ss().getSheetByName('自評留言');
   if (!sh) {
     sh = ss().insertSheet('自評留言');
-    sh.getRange(1, 1, 1, 6).setValues([['時間戳', '季度', '發話者', '類型', '對象', '內容']]);
+    sh.getRange(1, 1, 1, 7).setValues([['時間戳', '季度', '發話者', '類型', '對象', '內容', '匿名']]);
+  } else if (!sh.getRange(1, 7).getValue()) {
+    sh.getRange(1, 7).setValue('匿名'); // 舊表補上第 7 欄標題
   }
   const now = new Date();
   const rows = [];
-  if (p.selfNote && String(p.selfNote).trim()) rows.push([now, quarter, person, '自己', person, String(p.selfNote)]);
+  // 第 7 欄「匿名」：夥伴留言帶勾選值；自己/公司留言留空。舊資料無此欄＝視為具名（顯示名字）。
+  if (p.selfNote && String(p.selfNote).trim()) rows.push([now, quarter, person, '自己', person, String(p.selfNote), '']);
   (p.peerMessages || []).forEach((m) => {
-    if (m && m.to && m.msg && String(m.msg).trim()) rows.push([now, quarter, person, '夥伴', m.to, String(m.msg)]);
+    if (m && m.to && m.msg && String(m.msg).trim()) rows.push([now, quarter, person, '夥伴', m.to, String(m.msg), m.anon ? true : false]);
   });
-  if (p.companyNote && String(p.companyNote).trim()) rows.push([now, quarter, person, '公司', '', String(p.companyNote)]);
-  if (rows.length) sh.getRange(sh.getLastRow() + 1, 1, rows.length, 6).setValues(rows);
+  if (p.companyNote && String(p.companyNote).trim()) rows.push([now, quarter, person, '公司', '', String(p.companyNote), '']);
+  if (rows.length) sh.getRange(sh.getLastRow() + 1, 1, rows.length, 7).setValues(rows);
 }
 
 // p: { type:'self', quarter, person, role, attitude:[], performance:[]|null, selfNote, companyNote, peerMessages:[{to,msg}] }
@@ -452,7 +455,11 @@ function handleMyScores(p) {
   if (msgSh) {
     const mv = msgSh.getDataRange().getValues();
     for (let i = 1; i < mv.length; i++) {
-      if (mv[i][3] === '夥伴' && mv[i][4] === name) messagesToMe.push({ quarter: mv[i][1], msg: mv[i][5] });
+      if (mv[i][3] === '夥伴' && mv[i][4] === name) {
+        // 第 7 欄為 TRUE 才匿名；空白（舊資料）或 FALSE 都回傳發話者名字。
+        const anon = mv[i][6] === true || String(mv[i][6]).toUpperCase() === 'TRUE';
+        messagesToMe.push({ quarter: mv[i][1], msg: mv[i][5], from: anon ? '' : mv[i][2] });
+      }
       if (mv[i][3] === '自己' && mv[i][2] === name) myNotes.push({ quarter: mv[i][1], msg: mv[i][5] });
     }
   }

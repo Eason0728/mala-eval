@@ -51,7 +51,7 @@ function clearPeerDraft(quarter) {
 function saveSelfDraft() {
   if (!state.selfQuarter) return;
   const peerMessages = [...document.querySelectorAll('#peerMsgs .peermsg')]
-    .map((r) => ({ to: r.querySelector('.peer-to').value, msg: r.querySelector('.peer-msg').value }));
+    .map((r) => ({ to: r.querySelector('.peer-to').value, msg: r.querySelector('.peer-msg').value, anon: r.querySelector('.peer-anon-cb').checked }));
   const obj = {
     attitude: state.self.attitude,
     performance: state.self.performance,
@@ -243,7 +243,7 @@ function renderSelf() {
   document.getElementById('companyNote').oninput = saveSelfDraft;
   document.getElementById('peerMsgs').innerHTML = '';
   if (draft && Array.isArray(draft.peerMessages) && draft.peerMessages.length) {
-    draft.peerMessages.forEach((m) => addPeerRow(m.to, m.msg));
+    draft.peerMessages.forEach((m) => addPeerRow(m.to, m.msg, m.anon));
   } else {
     addPeerRow();
   }
@@ -259,19 +259,22 @@ function peerOptions() {
   return state.config.accounts.filter((a) => a.name !== state.me.name)
     .map((a) => `<option value="${a.name}">${a.name}（${a.role}）</option>`).join('');
 }
-function addPeerRow(to, msg) {
+function addPeerRow(to, msg, anon) {
   const host = document.getElementById('peerMsgs');
   const n = host.children.length + 1;
   const row = document.createElement('div');
   row.className = 'peermsg';
+  const checked = anon === undefined ? true : !!anon; // 預設匿名
   row.innerHTML = `<div class="muted">夥伴${n}</div>
     <select class="peer-to"><option value="">選擇夥伴…</option>${peerOptions()}</select>
-    <textarea class="peer-msg" rows="1" placeholder="想說的話…" style="width:100%"></textarea>`;
+    <textarea class="peer-msg" rows="1" placeholder="想說的話…" style="width:100%"></textarea>
+    <label class="peer-anon muted"><input type="checkbox" class="peer-anon-cb"${checked ? ' checked' : ''} /> 匿名（不讓對方知道是我）</label>`;
   host.appendChild(row);
   if (to) row.querySelector('.peer-to').value = to;
   if (msg) row.querySelector('.peer-msg').value = msg;
   row.querySelector('.peer-to').onchange = saveSelfDraft;
   row.querySelector('.peer-msg').oninput = saveSelfDraft;
+  row.querySelector('.peer-anon-cb').onchange = saveSelfDraft;
 }
 function escapeHtml(s) {
   return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -422,12 +425,13 @@ async function renderScores() {
   const toMe = (data.messagesToMe || []).slice().sort((a, b) => qSortKey(b.quarter) - qSortKey(a.quarter));
   const curMsgs = toMe.filter((m) => m.quarter === curStr);
   const oldMsgs = toMe.filter((m) => m.quarter !== curStr);
-  const qBubble = (m) => `<div class="msgbubble"><div class="muted" style="font-size:.85em;margin-bottom:4px">📅 ${qLabel(m.quarter)}</div>${escapeHtml(m.msg)}</div>`;
+  const fromLabel = (m) => `<div class="muted" style="font-size:.85em;margin-top:4px;text-align:right">— ${m.from ? escapeHtml(m.from) : '匿名夥伴'}</div>`;
+  const qBubble = (m) => `<div class="msgbubble"><div class="muted" style="font-size:.85em;margin-bottom:4px">📅 ${qLabel(m.quarter)}</div>${escapeHtml(m.msg)}${fromLabel(m)}</div>`;
   let toMeInner = curMsgs.length
-    ? curMsgs.map((m) => `<div class="msgbubble">${escapeHtml(m.msg)}</div>`).join('')
+    ? curMsgs.map((m) => `<div class="msgbubble">${escapeHtml(m.msg)}${fromLabel(m)}</div>`).join('')
     : '<p class="muted">這一季還沒有夥伴留言給你</p>';
   if (oldMsgs.length) toMeInner += `<details style="margin-top:6px"><summary class="muted" style="cursor:pointer">查看其他季度的留言（${oldMsgs.length}）</summary>${oldMsgs.map(qBubble).join('')}</details>`;
-  msgBlock += `<div class="card"><b>💬 夥伴對你說的話（匿名）</b>${toMeInner}</div>`;
+  msgBlock += `<div class="card"><b>💬 夥伴對你說的話</b>${toMeInner}</div>`;
   msgBlock += featuredBlock(
     data.myNotes, '💌 你寫給自己的話',
     (m) => nextStr(m.quarter) === curStr, // 優先「上一季寫給這一季」
@@ -653,7 +657,7 @@ document.getElementById('selfSubmit').onclick = async () => {
   btn.disabled = true;
   const quarter = state.selfQuarter;
   const peerMessages = [...document.querySelectorAll('#peerMsgs .peermsg')]
-    .map((r) => ({ to: r.querySelector('.peer-to').value, msg: r.querySelector('.peer-msg').value }))
+    .map((r) => ({ to: r.querySelector('.peer-to').value, msg: r.querySelector('.peer-msg').value, anon: r.querySelector('.peer-anon-cb').checked }))
     .filter((m) => m.to && m.msg.trim());
   const payload = {
     type: 'self', quarter, person: state.me.name, role: state.me.role,

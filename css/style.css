@@ -136,6 +136,8 @@ details.help div { font-size: 13px; color: #7c6f68; margin: 2px 0; }
 /* 自評留言 */
 .peermsg { margin: 8px 0; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: #fafafa; }
 .peermsg select { margin: 4px 0 6px; }
+.peer-anon { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 13px; cursor: pointer; }
+.peer-anon input { width: auto; margin: 0; }
 .msgbubble { background: #fff6f2; border-left: 3px solid var(--gold-deep); border-radius: 8px; padding: 9px 12px; margin: 8px 0; line-height: 1.6; }
 
 /* 分頁（填寫評鑑／我的成績） */
