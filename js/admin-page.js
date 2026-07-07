@@ -1,5 +1,47 @@
-import { fetchAdminData, submitAdjust, submitSupervisorPerf, submitSupervisorFeedback } from './api.js';
-import { round1, raterTotal, averageTotals, finalScore } from './scoring.js';
+import {
+  fetchAdminData, submitAdjust, submitSupervisorPerf, submitSupervisorFeedback,
+  submitFtTemplate, submitFtTitle,
+} from './api.js';
+import { round1, raterTotal, averageTotals, finalScore, kpiTotal } from './scoring.js';
+
+// 取某正職的職稱範本項目
+function ftItemsFor(ratee) {
+  const title = (DATA.ftTitles || {})[ratee] || '';
+  const items = (DATA.ftTemplates || {})[title] || [];
+  return { title, items };
+}
+// 該正職本季的評分 { sel:{key:等級}, actual:{key:實際值} }
+function ftPerfFor(ratee) {
+  const sp = (DATA.supervisorPerf || []).find((s) => s.ratee === ratee);
+  return { sel: (sp && sp.sel) || {}, actual: (sp && sp.actual) || {} };
+}
+const KPI_LEVELS = { 技能: ['A', 'B', 'C', 'D'], 執行力: ['完成', '未完成'] };
+const KPI_LEVEL_LABEL = { A: 'A（100%）', B: 'B（80%）', C: 'C（60%）', D: 'D（40%）', 完成: '完成', 未完成: '未完成' };
+
+// 評分列：項目名（比重）｜等級下拉｜實際值
+function ftScoreRowsHtml(items, sel, actual) {
+  return items.map((it) => {
+    const opts = KPI_LEVELS[it.type] || KPI_LEVELS['技能'];
+    const cur = sel[it.key] || '';
+    const label = it.label || `（第${it.no}項，未命名）`;
+    return `<tr>
+      <td style="text-align:left">${it.no}. ${esc(label)} <span class="muted">比重${it.weight}</span></td>
+      <td><select data-sel="${esc(it.key)}"><option value="">—</option>${opts.map((o) =>
+    `<option value="${o}" ${cur === o ? 'selected' : ''}>${KPI_LEVEL_LABEL[o] || o}</option>`).join('')}</select></td>
+      <td><input data-actual="${esc(it.key)}" value="${esc(actual[it.key] || '')}" placeholder="實際值" style="width:88px"></td>
+    </tr>`;
+  }).join('');
+}
+// 範本編輯列（key 存 data 屬性、不給改；新列存檔時自動產生）
+function ftEditorRowHtml(it, i) {
+  return `<div class="ftedit" data-key="${esc((it && it.key) || '')}" style="margin:5px 0">
+    №<input data-f="no" value="${(it && it.no) || i + 1}" style="width:38px">
+    <select data-f="type"><option value="技能" ${it && it.type === '技能' ? 'selected' : ''}>技能</option><option value="執行力" ${it && it.type === '執行力' ? 'selected' : ''}>執行力</option></select>
+    <input data-f="label" value="${esc((it && it.label) || '')}" placeholder="項目內容" style="width:150px">
+    <input data-f="target" value="${esc((it && it.target) || '')}" placeholder="目標值" style="width:70px">
+    比重<input data-f="weight" type="number" value="${(it && it.weight) || 0}" style="width:52px">
+    <button type="button" class="delFtItem tab">刪</button></div>`;
+}
 
 let DATA = null;
 let PASS = '';
@@ -48,7 +90,12 @@ function fillAdminSelectors() {
 function buildRows() {
   const { config, peerRecords, supervisorPerf, adjustments, results, selfRecords } = DATA;
   const adjBy = new Map(adjustments.map((a) => [a.ratee, a]));
-  const spBy = new Map(supervisorPerf.map((s) => [s.ratee, raterTotal(s.scores)]));
+  // 正職表現＝依職稱範本比重加權（kpiTotal）；未指定職稱或未評完 → null（未計）
+  const spBy = new Map();
+  supervisorPerf.forEach((s) => {
+    const { items } = ftItemsFor(s.ratee);
+    spBy.set(s.ratee, items.length ? kpiTotal(items, s.sel) : null);
+  });
   const attMap = new Map(); // ratee -> 每位評核者的態度總分[]（含自評）
   const perfMap = new Map();
   config.accounts.forEach((a) => { attMap.set(a.name, []); perfMap.set(a.name, []); });
@@ -126,20 +173,31 @@ function renderOverview(rows) {
 }
 
 function renderDetail(ratee) {
-  const { config } = DATA;
   const row = buildRows().find((r) => r.ratee === ratee);
   const adj = DATA.adjustments.find((a) => a.ratee === ratee) || {};
   let perfBlock = '';
   if (row.role === '正職') {
-    const items = config.banks.ftPerf;
-    const sp = DATA.supervisorPerf.find((s) => s.ratee === ratee);
-    const cur = sp ? sp.scores : new Array(items.length).fill(0);
-    perfBlock = `<div class="card"><b>主管評：正職表現</b><br>
-      ${items.map((it, i) => `<div>${it.label}
-        <select data-perf="${i}"><option value="0" disabled ${cur[i] ? '' : 'selected'}>—</option>${[1, 2, 3, 4, 5].map((v) =>
-          `<option value="${v}" ${cur[i] === v ? 'selected' : ''}>${v}★</option>`).join('')}</select>
-      </div>`).join('')}
-      <button id="savePerf">儲存表現評分</button> <span id="perfMsg" class="muted"></span></div>`;
+    const { title, items } = ftItemsFor(ratee);
+    const { sel, actual } = ftPerfFor(ratee);
+    const titleOpts = Object.keys(DATA.ftTemplates || {});
+    const titleSelect = `<select id="ftTitleSel"><option value="">未指定</option>${titleOpts.map((t) =>
+      `<option value="${t}" ${t === title ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
+    if (!items.length) {
+      perfBlock = `<div class="card"><b>主管評：正職職能表現（KPI）</b><br>
+        職稱範本：${titleSelect} <button id="saveFtTitle">套用職稱</button> <span id="ftTitleMsg" class="muted"></span>
+        <div class="muted">選好職稱範本後即可評分。</div></div>`;
+    } else {
+      const total = kpiTotal(items, sel);
+      perfBlock = `<div class="card"><b>主管評：正職職能表現（KPI）</b>
+        <span class="muted">滿分 70，本季小計：${total === null ? '未評完' : numText(total)}</span><br>
+        職稱範本：${titleSelect} <button id="saveFtTitle">套用</button> <span id="ftTitleMsg" class="muted"></span>
+        <table><tr><th style="text-align:left">項目（比重）</th><th>等級</th><th>實際值</th></tr>${ftScoreRowsHtml(items, sel, actual)}</table>
+        <button id="savePerf">儲存表現評分</button> <span id="perfMsg" class="muted"></span>
+        <details style="margin-top:10px"><summary class="muted" style="cursor:pointer">✏️ 編輯「${esc(title)}」範本項目（同職稱者一起套用）</summary>
+          <div id="ftTplEditor">${items.map((it, i) => ftEditorRowHtml(it, i)).join('')}</div>
+          <button id="addFtItem" type="button" class="tab" style="margin-top:6px">＋ 新增項目</button>
+          <button id="saveFtTpl">儲存範本</button> <span id="ftTplMsg" class="muted"></span></details></div>`;
+    }
   }
   const fbRow = (DATA.supervisorFeedback || []).find((f) => f.ratee === ratee);
   const fb = fbRow ? fbRow.text : '';
@@ -167,21 +225,68 @@ function renderDetail(ratee) {
       <button id="saveFb">儲存回饋</button> <span id="fbMsg" class="muted"></span>
     </div>`;
 
-  if (row.role === '正職') {
-    document.getElementById('savePerf').onclick = async () => {
-      const scores = [...document.querySelectorAll('[data-perf]')].map((s) => Number(s.value));
-      const btn = document.getElementById('savePerf');
-      const msg = document.getElementById('perfMsg');
-      if (scores.some((v) => !v)) { msg.textContent = '請為每一項評分'; return; }
+  // 套用職稱範本
+  if (document.getElementById('saveFtTitle')) {
+    document.getElementById('saveFtTitle').onclick = async () => {
+      const t = document.getElementById('ftTitleSel').value;
+      const msg = document.getElementById('ftTitleMsg');
+      const btn = document.getElementById('saveFtTitle');
       btn.disabled = true; msg.textContent = '儲存中…';
       try {
-        const res = await submitSupervisorPerf({ type: 'supervisorPerf', passcode: PASS, quarter: CURRENT_Q, ratee, scores });
+        const res = await submitFtTitle({ type: 'ftTitle', passcode: PASS, ratee, title: t });
+        if (!res.ok) throw new Error();
+      } catch { msg.textContent = '儲存失敗，請重試'; btn.disabled = false; return; }
+      try { await reload(); renderDetail(ratee); } catch { msg.textContent = '✅ 已儲存（請重新整理）'; btn.disabled = false; }
+    };
+  }
+  // 儲存 KPI 評分（等級＋實際值）
+  if (document.getElementById('savePerf')) {
+    document.getElementById('savePerf').onclick = async () => {
+      const { items } = ftItemsFor(ratee);
+      const sel = {}; const actual = {};
+      document.querySelectorAll('[data-sel]').forEach((s) => { sel[s.dataset.sel] = s.value; });
+      document.querySelectorAll('[data-actual]').forEach((a) => { actual[a.dataset.actual] = a.value; });
+      const btn = document.getElementById('savePerf');
+      const msg = document.getElementById('perfMsg');
+      if (items.some((it) => !sel[it.key])) { msg.textContent = '請每一項都選等級'; return; }
+      btn.disabled = true; msg.textContent = '儲存中…';
+      try {
+        const res = await submitSupervisorPerf({ type: 'supervisorPerf', passcode: PASS, quarter: CURRENT_Q, ratee, sel, actual });
         if (!res.ok) throw new Error();
       } catch { msg.textContent = '儲存失敗，請重試'; btn.disabled = false; return; }
       try {
         await reload(); renderDetail(ratee);
         document.getElementById('perfMsg').textContent = '✅ 已儲存';
       } catch { msg.textContent = '✅ 已儲存（畫面更新失敗，請重新整理）'; btn.disabled = false; }
+    };
+  }
+  // 範本編輯：新增/刪除項目、儲存整組
+  if (document.getElementById('saveFtTpl')) {
+    document.getElementById('addFtItem').onclick = () => {
+      const host = document.getElementById('ftTplEditor');
+      host.insertAdjacentHTML('beforeend', ftEditorRowHtml({ type: '技能', weight: 5 }, host.children.length));
+    };
+    document.getElementById('ftTplEditor').onclick = (e) => {
+      if (e.target.classList.contains('delFtItem')) e.target.closest('.ftedit').remove();
+    };
+    document.getElementById('saveFtTpl').onclick = async () => {
+      const { title } = ftItemsFor(ratee);
+      const items = [...document.querySelectorAll('#ftTplEditor .ftedit')].map((r, i) => {
+        const g = (f) => r.querySelector(`[data-f=${f}]`).value;
+        return {
+          no: Number(g('no')) || i + 1,
+          key: r.dataset.key || `k${Date.now().toString(36)}${i}`,
+          type: g('type'), label: g('label'), target: g('target'), weight: Number(g('weight')) || 0,
+        };
+      });
+      const btn = document.getElementById('saveFtTpl');
+      const msg = document.getElementById('ftTplMsg');
+      btn.disabled = true; msg.textContent = '儲存中…';
+      try {
+        const res = await submitFtTemplate({ type: 'ftTemplate', passcode: PASS, title, items });
+        if (!res.ok) throw new Error();
+      } catch { msg.textContent = '儲存失敗，請重試'; btn.disabled = false; return; }
+      try { await reload(); renderDetail(ratee); } catch { msg.textContent = '✅ 已儲存（請重新整理）'; btn.disabled = false; }
     };
   }
   document.getElementById('saveFb').onclick = async () => {

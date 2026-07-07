@@ -1,6 +1,6 @@
 import { login, fetchConfig, submitPeer, submitSelf, myScores, changePassword } from './api.js';
 import { splitPeerSubmission } from './validate.js';
-import { averageItems, round1 } from './scoring.js';
+import { averageItems, round1, kpiItemScore } from './scoring.js';
 
 const state = { me: null, auth: null, config: null, ratings: new Map(), fillQuarter: null, self: null, selfQuarter: null };
 
@@ -314,7 +314,7 @@ function buildMyQuarters(data) {
   const selfByQC = {};
   (data.self || []).forEach((r) => { selfByQC[r.quarter] = selfByQC[r.quarter] || {}; selfByQC[r.quarter][r.category] = r.scores; });
   const spByQ = {};
-  (data.supervisorPerf || []).forEach((sp) => { spByQ[sp.quarter] = sp.scores; });
+  (data.supervisorPerf || []).forEach((sp) => { spByQ[sp.quarter] = sp.sel || {}; });
 
   const quarters = new Set([].concat(Object.keys(recByQC), Object.keys(selfByQC), Object.keys(spByQ)));
   quarters.forEach((q) => {
@@ -339,9 +339,12 @@ function buildMyQuarters(data) {
         if (peerPerf.length) { const pp = averageItems(peerPerf); qd.perfPeer = perfBank.map((it, i) => ({ label: it.label, score: pp[i] })); }
         if (selfPerf) qd.perfSelf = perfBank.map((it, i) => ({ label: it.label, score: selfPerf[i] }));
       }
-    } else if (spByQ[q] && spByQ[q].length) {
-      const perfBank = bankFor('正職', 'perf');
-      qd.perf = perfBank.map((it, i) => ({ label: it.label, score: spByQ[q][i] }));
+    } else if (role === '正職' && spByQ[q]) {
+      // 正職職能表現＝依本人職稱範本，每項 比重×等級%（執行力完成=比重、未完成=0）
+      const tpl = data.ftTemplate || [];
+      const sel = spByQ[q];
+      const perfItems = tpl.map((it) => ({ label: it.label || `第${it.no}項`, score: kpiItemScore(it, sel[it.key]) }));
+      if (tpl.length && perfItems.every((p) => p.score !== null)) qd.perf = perfItems;
     }
   });
   return byQuarter;

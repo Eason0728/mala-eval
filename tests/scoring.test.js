@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   raterTotal, averageTotals, averageItems, round1, finalScore, aggregateRatee,
+  kpiItemScore, kpiTotal,
 } from '../js/scoring.js';
 
 test('averageItems 每題平均；加總等於 averageTotals；空回 null', () => {
@@ -90,4 +91,50 @@ test('aggregateRatee：± 調整生效', () => {
     adjustment: { attitudeAdjust: 2, performanceAdjust: -3 },
   });
   assert.equal(r.finalScore, 49);
+});
+
+test('kpiItemScore 技能項：等級 A/B/C/D = 比重×100/80/60/40%', () => {
+  assert.equal(kpiItemScore({ weight: 20, type: '技能' }, 'A'), 20);
+  assert.equal(kpiItemScore({ weight: 20, type: '技能' }, 'B'), 16);
+  assert.equal(kpiItemScore({ weight: 10, type: '技能' }, 'C'), 6);
+  assert.equal(kpiItemScore({ weight: 5, type: '技能' }, 'D'), 2);
+  assert.equal(kpiItemScore({ weight: 5, type: '技能' }, ''), null); // 未評
+});
+
+test('kpiItemScore 執行力項：完成=比重、未完成=0', () => {
+  assert.equal(kpiItemScore({ weight: 5, type: '執行力' }, '完成'), 5);
+  assert.equal(kpiItemScore({ weight: 5, type: '執行力' }, '未完成'), 0);
+  assert.equal(kpiItemScore({ weight: 5, type: '執行力' }, ''), null); // 未評
+});
+
+test('kpiTotal 全評完 → 加總；滿分情境=70', () => {
+  const items = [
+    { key: 'sales', weight: 5, type: '技能' }, { key: 'profit', weight: 10, type: '技能' },
+    { key: 'op', weight: 20, type: '技能' }, { key: 'stock', weight: 5, type: '技能' },
+    { key: 'google', weight: 5, type: '技能' },
+    { key: 'e6', weight: 5, type: '執行力' }, { key: 'e7', weight: 5, type: '執行力' },
+    { key: 'e8', weight: 5, type: '執行力' }, { key: 'e9', weight: 5, type: '執行力' },
+    { key: 'e10', weight: 5, type: '執行力' },
+  ];
+  const allA = {};
+  items.forEach((it) => { allA[it.key] = it.type === '執行力' ? '完成' : 'A'; });
+  assert.equal(kpiTotal(items, allA), 70);
+});
+
+test('kpiTotal 混合等級 → 加權加總', () => {
+  const items = [
+    { key: 'sales', weight: 5, type: '技能' }, // A → 5
+    { key: 'profit', weight: 10, type: '技能' }, // B → 8
+    { key: 'op', weight: 20, type: '技能' }, // C → 12
+    { key: 'e6', weight: 5, type: '執行力' }, // 完成 → 5
+    { key: 'e7', weight: 5, type: '執行力' }, // 未完成 → 0
+  ];
+  const sel = { sales: 'A', profit: 'B', op: 'C', e6: '完成', e7: '未完成' };
+  assert.equal(kpiTotal(items, sel), 30);
+});
+
+test('kpiTotal 任一項未評 → null（整體未計）', () => {
+  const items = [{ key: 'a', weight: 5, type: '技能' }, { key: 'b', weight: 5, type: '執行力' }];
+  assert.equal(kpiTotal(items, { a: 'A' }), null); // b 未評
+  assert.equal(kpiTotal([], {}), null);
 });

@@ -39,6 +39,37 @@ export function finalScore({ attitude, attitudeAdjust = 0, performance = null, p
   return { score: attitudePart + performance + performanceAdjust, performanceCounted: true };
 }
 
+// ===== 正職職能表現（加權 KPI）=====
+// 技能項：等級 A/B/C/D = 100/80/60/40%，得分 = 比重 × %。
+// 執行力項：完成 = 比重全拿（100%）、未完成 = 0。
+export const KPI_SKILL_FACTOR = { A: 1, B: 0.8, C: 0.6, D: 0.4 };
+
+// item: { key, weight, type:'技能'|'執行力' }；sel：技能為 'A'|'B'|'C'|'D'、執行力為 '完成'|'未完成'。
+// 未選/無效回 null（代表該項未評）。
+export function kpiItemScore(item, sel) {
+  const w = Number(item.weight) || 0;
+  if (item.type === '執行力') {
+    if (sel === '完成') return w;
+    if (sel === '未完成') return 0;
+    return null;
+  }
+  const f = KPI_SKILL_FACTOR[sel];
+  return f === undefined ? null : round1(w * f);
+}
+
+// items 依序；selByKey：{ itemKey: sel }。任一項未評 → 回 null（整體未計）。
+export function kpiTotal(items, selByKey) {
+  if (!items || !items.length) return null;
+  const sels = selByKey || {};
+  let total = 0;
+  for (const it of items) {
+    const s = kpiItemScore(it, sels[it.key]);
+    if (s === null) return null;
+    total += s;
+  }
+  return round1(total);
+}
+
 // 組合單一受評者完整結果。計時表現=全員互評平均；正職表現=主管單一評分。
 export function aggregateRatee({
   ratee, role, attitudeTotals = [], performanceTotals = [], supervisorPerf = null, adjustment = {},

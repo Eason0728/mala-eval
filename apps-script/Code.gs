@@ -127,7 +127,7 @@ function currentQuarter() {
 
 function publicConfig() {
   return {
-    ver: 9, // 部署版本標記，方便 curl 驗證新版是否生效
+    ver: 11, // 部署版本標記，方便 curl 驗證新版是否生效（10 為作廢的公司留言改動）
     quarter: currentQuarter(),
     accounts: readAccounts().map((a) => ({ name: a.name, role: a.role })),
     banks: {
@@ -214,15 +214,120 @@ function handleSelf(p) {
   return { ok: true };
 }
 
-// p: { type:'supervisorPerf', passcode, quarter, ratee, scores:[] }
+// p: { type:'supervisorPerf', passcode, quarter, ratee, sel:{key:等級/完成}, actual:{key:實際值} }
+// 正職職能表現：主管每項選等級（技能A/B/C/D）或完成/未完成（執行力）＋填實際值。分數由前端依範本比重計算。
 function handleSupervisorPerf(p) {
   if (!checkPass(p.passcode)) return { ok: false, reason: 'unauthorized' };
   const sh = ss().getSheetByName('主管評分');
   const v = sh.getDataRange().getValues();
   let rowIdx = -1;
   for (let i = 1; i < v.length; i++) if (v[i][0] === p.quarter && v[i][1] === p.ratee) { rowIdx = i + 1; break; }
-  const row = [p.quarter, p.ratee, JSON.stringify(p.scores), new Date(), '主管'];
+  const payload = JSON.stringify({ sel: p.sel || {}, actual: p.actual || {} });
+  const row = [p.quarter, p.ratee, payload, new Date(), '主管'];
   if (rowIdx === -1) sh.appendRow(row); else sh.getRange(rowIdx, 1, 1, row.length).setValues([row]);
+  return { ok: true };
+}
+
+// ====== 正職職能表現 KPI：範本（依職稱）＋職稱對應 ======
+// 範本分頁「正職表現範本」：職稱｜項次｜key｜類型(技能/執行力)｜項目內容｜目標值｜比重
+// 對應分頁「正職職稱」：姓名｜職稱。皆由 seedFtPerf 建立，主管可在管理區編輯。
+var FT_PERF_TEMPLATES = {
+  '店長': [
+    { no: 1, key: 'sales', type: '技能', label: '營業額達成率', target: '100%', weight: 5 },
+    { no: 2, key: 'profit', type: '技能', label: '獲利率', target: '12%', weight: 10 },
+    { no: 3, key: 'opscore', type: '技能', label: '營運評分表', target: '90', weight: 20 },
+    { no: 4, key: 'stock', type: '技能', label: '盤點正確率', target: '100%', weight: 5 },
+    { no: 5, key: 'google', type: '技能', label: '當季度GOOGLE星級', target: '4.8', weight: 5 },
+    { no: 6, key: 'exec6', type: '執行力', label: '', target: '', weight: 5 },
+    { no: 7, key: 'exec7', type: '執行力', label: '', target: '', weight: 5 },
+    { no: 8, key: 'exec8', type: '執行力', label: '', target: '', weight: 5 },
+    { no: 9, key: 'exec9', type: '執行力', label: '', target: '', weight: 5 },
+    { no: 10, key: 'exec10', type: '執行力', label: '', target: '', weight: 5 },
+  ],
+  '儲備幹部': [
+    { no: 1, key: 'sales', type: '技能', label: '營業額達成率', target: '100%', weight: 5 },
+    { no: 2, key: 'profit', type: '技能', label: '獲利率', target: '12%', weight: 5 },
+    { no: 3, key: 'opscore', type: '技能', label: '營運評分表', target: '90', weight: 10 },
+    { no: 4, key: 'cookerr', type: '技能', label: '餐點製作錯誤次數', target: '3次/季', weight: 15 },
+    { no: 5, key: 'packerr', type: '技能', label: '餐點包裝錯誤次數', target: '3次/季', weight: 10 },
+    { no: 6, key: 'exec6', type: '執行力', label: '', target: '', weight: 5 },
+    { no: 7, key: 'exec7', type: '執行力', label: '', target: '', weight: 5 },
+    { no: 8, key: 'exec8', type: '執行力', label: '', target: '', weight: 5 },
+    { no: 9, key: 'exec9', type: '執行力', label: '', target: '', weight: 5 },
+    { no: 10, key: 'exec10', type: '執行力', label: '', target: '', weight: 5 },
+  ],
+};
+var FT_TITLES_SEED = { '蕭彣芳': '店長', '張羽成': '儲備幹部', '陳盈如': '儲備幹部' };
+
+function readFtTemplates() {
+  const sh = ss().getSheetByName('正職表現範本');
+  if (!sh) return {};
+  const v = sh.getDataRange().getValues();
+  const out = {};
+  for (let i = 1; i < v.length; i++) {
+    const title = v[i][0];
+    if (!title) continue;
+    (out[title] = out[title] || []).push({
+      no: v[i][1], key: String(v[i][2]), type: v[i][3],
+      label: v[i][4] || '', target: v[i][5] || '', weight: Number(v[i][6]) || 0,
+    });
+  }
+  return out;
+}
+function readFtTitles() {
+  const sh = ss().getSheetByName('正職職稱');
+  if (!sh) return {};
+  const v = sh.getDataRange().getValues();
+  const out = {};
+  for (let i = 1; i < v.length; i++) if (v[i][0]) out[String(v[i][0])] = String(v[i][1] || '');
+  return out;
+}
+
+// 一次性：建立範本＋職稱對應分頁並填入種子（店長版、儲備幹部版）。
+function seedFtPerf() {
+  const book = ss();
+  let tpl = book.getSheetByName('正職表現範本');
+  if (!tpl) tpl = book.insertSheet('正職表現範本');
+  tpl.clear();
+  tpl.getRange(1, 1, 1, 7).setValues([['職稱', '項次', 'key', '類型', '項目內容', '目標值', '比重']]);
+  const rows = [];
+  Object.keys(FT_PERF_TEMPLATES).forEach((title) => {
+    FT_PERF_TEMPLATES[title].forEach((it) => rows.push([title, it.no, it.key, it.type, it.label, it.target, it.weight]));
+  });
+  tpl.getRange(2, 1, rows.length, 7).setValues(rows);
+  let map = book.getSheetByName('正職職稱');
+  if (!map) map = book.insertSheet('正職職稱');
+  map.clear();
+  map.getRange(1, 1, 1, 2).setValues([['姓名', '職稱']]);
+  const mrows = Object.keys(FT_TITLES_SEED).map((n) => [n, FT_TITLES_SEED[n]]);
+  map.getRange(2, 1, mrows.length, 2).setValues(mrows);
+  return '正職表現範本（' + Object.keys(FT_PERF_TEMPLATES).join('、') + '）＋職稱對應已建立';
+}
+
+// p: { type:'ftTemplate', passcode, title, items:[{no,key,type,label,target,weight}] } — 覆寫某職稱整組項目
+function handleFtTemplate(p) {
+  if (!checkPass(p.passcode)) return { ok: false, reason: 'unauthorized' };
+  let sh = ss().getSheetByName('正職表現範本');
+  if (!sh) { sh = ss().insertSheet('正職表現範本'); sh.getRange(1, 1, 1, 7).setValues([['職稱', '項次', 'key', '類型', '項目內容', '目標值', '比重']]); }
+  const v = sh.getDataRange().getValues();
+  const keep = [v[0] || ['職稱', '項次', 'key', '類型', '項目內容', '目標值', '比重']];
+  for (let i = 1; i < v.length; i++) if (v[i][0] && v[i][0] !== p.title) keep.push(v[i]);
+  (p.items || []).forEach((it, idx) => keep.push([p.title, it.no || idx + 1, it.key, it.type, it.label || '', it.target || '', Number(it.weight) || 0]));
+  sh.clearContents();
+  sh.getRange(1, 1, keep.length, 7).setValues(keep);
+  return { ok: true };
+}
+
+// p: { type:'ftTitle', passcode, ratee, title } — 設定某正職用哪個職稱範本
+function handleFtTitle(p) {
+  if (!checkPass(p.passcode)) return { ok: false, reason: 'unauthorized' };
+  let sh = ss().getSheetByName('正職職稱');
+  if (!sh) { sh = ss().insertSheet('正職職稱'); sh.getRange(1, 1, 1, 2).setValues([['姓名', '職稱']]); }
+  const v = sh.getDataRange().getValues();
+  let idx = -1;
+  for (let i = 1; i < v.length; i++) if (v[i][0] === p.ratee) { idx = i + 1; break; }
+  const row = [p.ratee, p.title || ''];
+  if (idx === -1) sh.appendRow(row); else sh.getRange(idx, 1, 1, 2).setValues([row]);
   return { ok: true };
 }
 
@@ -270,7 +375,11 @@ function readAdminData(passcode, quarter) {
   const sp = ss().getSheetByName('主管評分').getDataRange().getValues();
   const supervisorPerf = [];
   for (let i = 1; i < sp.length; i++) {
-    if (sp[i][0] === quarter) supervisorPerf.push({ ratee: sp[i][1], scores: JSON.parse(sp[i][2] || '[]') });
+    if (sp[i][0] === quarter) {
+      var d = {};
+      try { d = JSON.parse(sp[i][2] || '{}'); } catch (e) { d = {}; }
+      supervisorPerf.push({ ratee: sp[i][1], sel: d.sel || {}, actual: d.actual || {} });
+    }
   }
   const adj = ss().getSheetByName('主管調整').getDataRange().getValues();
   const adjustments = [];
@@ -323,7 +432,10 @@ function readAdminData(passcode, quarter) {
       if (fv[i][0] === quarter) supervisorFeedback.push({ ratee: fv[i][1], text: fv[i][2] });
     }
   }
-  return { config: publicConfig(), peerRecords, supervisorPerf, adjustments, results, selfRecords, companyMessages, supervisorFeedback };
+  return {
+    config: publicConfig(), peerRecords, supervisorPerf, adjustments, results, selfRecords,
+    companyMessages, supervisorFeedback, ftTemplates: readFtTemplates(), ftTitles: readFtTitles(),
+  };
 }
 
 function doGet(e) {
@@ -344,6 +456,8 @@ function doPost(e) {
     if (p.type === 'peer') return jsonOut(handlePeer(p));
     if (p.type === 'self') return jsonOut(handleSelf(p));
     if (p.type === 'supervisorPerf') return jsonOut(handleSupervisorPerf(p));
+    if (p.type === 'ftTemplate') return jsonOut(handleFtTemplate(p));
+    if (p.type === 'ftTitle') return jsonOut(handleFtTitle(p));
     if (p.type === 'adjust') return jsonOut(handleAdjust(p));
     if (p.type === 'supervisorFeedback') return jsonOut(handleSupervisorFeedback(p));
     return jsonOut({ ok: false, reason: 'unknown type' });
@@ -438,8 +552,15 @@ function handleMyScores(p) {
   const sp = ss().getSheetByName('主管評分').getDataRange().getValues();
   const supervisorPerf = [];
   for (let i = 1; i < sp.length; i++) {
-    if (sp[i][1] === name) supervisorPerf.push({ quarter: sp[i][0], scores: JSON.parse(sp[i][2] || '[]') });
+    if (sp[i][1] === name) {
+      var d = {};
+      try { d = JSON.parse(sp[i][2] || '{}'); } catch (e) { d = {}; }
+      supervisorPerf.push({ quarter: sp[i][0], sel: d.sel || {}, actual: d.actual || {} });
+    }
   }
+  // 正職職能表現 KPI：本人職稱＋該職稱範本（前端據此＋sel 算表現分）
+  const ftTitle = readFtTitles()[name] || '';
+  const ftTemplate = ftTitle ? (readFtTemplates()[ftTitle] || []) : [];
   const selfSh = ss().getSheetByName('自評紀錄');
   const self = [];
   if (selfSh) {
@@ -481,7 +602,10 @@ function handleMyScores(p) {
       if (fv[i][1] === name && String(fv[i][2] || '').trim()) supervisorFeedback.push({ quarter: fv[i][0], msg: fv[i][2] });
     }
   }
-  return { ok: true, name, role: acc.role, records, supervisorPerf, seeded: readResultDetail(name), self, messagesToMe, myNotes, supervisorFeedback, adjustments };
+  return {
+    ok: true, name, role: acc.role, records, supervisorPerf, seeded: readResultDetail(name),
+    self, messagesToMe, myNotes, supervisorFeedback, adjustments, ftTitle, ftTemplate,
+  };
 }
 
 // ====== 一次性：建立某季「結果細項」空白模板供手動填分（如第一季歷史資料）======
