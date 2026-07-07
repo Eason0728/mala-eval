@@ -18,29 +18,39 @@ function ftPerfFor(ratee) {
 const KPI_LEVELS = { 技能: ['A', 'B', 'C', 'D'], 執行力: ['完成', '未完成'] };
 const KPI_LEVEL_LABEL = { A: 'A（100%）', B: 'B（80%）', C: 'C（60%）', D: 'D（40%）', 完成: '完成', 未完成: '未完成' };
 
-// 評分列：項目名（比重）｜等級下拉｜實際值
+// 評分列：項目名（比重）＋衡量標準｜等級下拉｜實際值
 function ftScoreRowsHtml(items, sel, actual) {
   return items.map((it) => {
     const opts = KPI_LEVELS[it.type] || KPI_LEVELS['技能'];
     const cur = sel[it.key] || '';
     const label = it.label || `（第${it.no}項，未命名）`;
+    const lv = it.levels || {};
+    const std = (it.type === '技能' && (lv.A || lv.B || lv.C || lv.D))
+      ? `<div class="muted" style="font-size:.82em">A:${esc(lv.A || '-')}　B:${esc(lv.B || '-')}　C:${esc(lv.C || '-')}　D:${esc(lv.D || '-')}</div>` : '';
     return `<tr>
-      <td style="text-align:left">${it.no}. ${esc(label)} <span class="muted">比重${it.weight}</span></td>
+      <td style="text-align:left">${it.no}. ${esc(label)} <span class="muted">比重${it.weight}</span>${std}</td>
       <td><select data-sel="${esc(it.key)}"><option value="">—</option>${opts.map((o) =>
     `<option value="${o}" ${cur === o ? 'selected' : ''}>${KPI_LEVEL_LABEL[o] || o}</option>`).join('')}</select></td>
       <td><input data-actual="${esc(it.key)}" value="${esc(actual[it.key] || '')}" placeholder="實際值" style="width:88px"></td>
     </tr>`;
   }).join('');
 }
-// 範本編輯列（key 存 data 屬性、不給改；新列存檔時自動產生）
+// 範本編輯列（每項一小塊：基本欄＋衡量標準A/B/C/D。key 存 data 屬性、新列存檔時自動產生）
 function ftEditorRowHtml(it, i) {
-  return `<div class="ftedit" data-key="${esc((it && it.key) || '')}" style="margin:5px 0">
-    №<input data-f="no" value="${(it && it.no) || i + 1}" style="width:38px">
-    <select data-f="type"><option value="技能" ${it && it.type === '技能' ? 'selected' : ''}>技能</option><option value="執行力" ${it && it.type === '執行力' ? 'selected' : ''}>執行力</option></select>
-    <input data-f="label" value="${esc((it && it.label) || '')}" placeholder="項目內容" style="width:150px">
-    <input data-f="target" value="${esc((it && it.target) || '')}" placeholder="目標值" style="width:70px">
-    比重<input data-f="weight" type="number" value="${(it && it.weight) || 0}" style="width:52px">
-    <button type="button" class="delFtItem tab">刪</button></div>`;
+  it = it || {};
+  const lv = it.levels || {};
+  return `<div class="ftedit" data-key="${esc(it.key || '')}" style="border:1px solid var(--line);border-radius:8px;padding:8px;margin:6px 0">
+    <div>№<input data-f="no" value="${it.no || i + 1}" style="width:36px">
+      <select data-f="type"><option value="技能" ${it.type === '技能' ? 'selected' : ''}>技能</option><option value="執行力" ${it.type === '執行力' ? 'selected' : ''}>執行力</option></select>
+      <input data-f="label" value="${esc(it.label || '')}" placeholder="項目內容" style="width:150px">
+      目標<input data-f="target" value="${esc(it.target || '')}" placeholder="目標值" style="width:64px">
+      比重<input data-f="weight" type="number" value="${it.weight || 0}" style="width:50px">
+      <button type="button" class="delFtItem tab">刪</button></div>
+    <div class="muted" style="margin-top:5px">衡量標準
+      A<input data-f="A" value="${esc(lv.A || '')}" placeholder="如100%↑" style="width:76px">
+      B<input data-f="B" value="${esc(lv.B || '')}" placeholder="B" style="width:76px">
+      C<input data-f="C" value="${esc(lv.C || '')}" placeholder="C" style="width:76px">
+      D<input data-f="D" value="${esc(lv.D || '')}" placeholder="D" style="width:76px"></div></div>`;
 }
 
 let DATA = null;
@@ -272,11 +282,12 @@ function renderDetail(ratee) {
     document.getElementById('saveFtTpl').onclick = async () => {
       const { title } = ftItemsFor(ratee);
       const items = [...document.querySelectorAll('#ftTplEditor .ftedit')].map((r, i) => {
-        const g = (f) => r.querySelector(`[data-f=${f}]`).value;
+        const g = (f) => r.querySelector(`[data-f="${f}"]`).value;
         return {
           no: Number(g('no')) || i + 1,
           key: r.dataset.key || `k${Date.now().toString(36)}${i}`,
           type: g('type'), label: g('label'), target: g('target'), weight: Number(g('weight')) || 0,
+          levels: { A: g('A'), B: g('B'), C: g('C'), D: g('D') },
         };
       });
       const btn = document.getElementById('saveFtTpl');

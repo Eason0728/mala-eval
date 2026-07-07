@@ -127,7 +127,7 @@ function currentQuarter() {
 
 function publicConfig() {
   return {
-    ver: 11, // 部署版本標記，方便 curl 驗證新版是否生效（10 為作廢的公司留言改動）
+    ver: 12, // 部署版本標記，方便 curl 驗證新版是否生效（10 作廢；11→12 加 KPI 衡量標準A/B/C/D）
     quarter: currentQuarter(),
     accounts: readAccounts().map((a) => ({ name: a.name, role: a.role })),
     banks: {
@@ -231,30 +231,23 @@ function handleSupervisorPerf(p) {
 // ====== 正職職能表現 KPI：範本（依職稱）＋職稱對應 ======
 // 範本分頁「正職表現範本」：職稱｜項次｜key｜類型(技能/執行力)｜項目內容｜目標值｜比重
 // 對應分頁「正職職稱」：姓名｜職稱。皆由 seedFtPerf 建立，主管可在管理區編輯。
+function ftExec(no) { return { no: no, key: 'exec' + no, type: '執行力', label: '', target: '', levels: { A: '完成', B: '', C: '', D: '未完成' }, weight: 5 }; }
 var FT_PERF_TEMPLATES = {
   '店長': [
-    { no: 1, key: 'sales', type: '技能', label: '營業額達成率', target: '100%', weight: 5 },
-    { no: 2, key: 'profit', type: '技能', label: '獲利率', target: '12%', weight: 10 },
-    { no: 3, key: 'opscore', type: '技能', label: '營運評分表', target: '90', weight: 20 },
-    { no: 4, key: 'stock', type: '技能', label: '盤點正確率', target: '100%', weight: 5 },
-    { no: 5, key: 'google', type: '技能', label: '當季度GOOGLE星級', target: '4.8', weight: 5 },
-    { no: 6, key: 'exec6', type: '執行力', label: '', target: '', weight: 5 },
-    { no: 7, key: 'exec7', type: '執行力', label: '', target: '', weight: 5 },
-    { no: 8, key: 'exec8', type: '執行力', label: '', target: '', weight: 5 },
-    { no: 9, key: 'exec9', type: '執行力', label: '', target: '', weight: 5 },
-    { no: 10, key: 'exec10', type: '執行力', label: '', target: '', weight: 5 },
+    { no: 1, key: 'sales', type: '技能', label: '營業額達成率', target: '100%', levels: { A: '100%↑', B: '90～99%', C: '80～89%', D: '80%↓' }, weight: 5 },
+    { no: 2, key: 'profit', type: '技能', label: '獲利率', target: '12%', levels: { A: '12%↑', B: '7～11%', C: '2～6%', D: '2%↓' }, weight: 10 },
+    { no: 3, key: 'opscore', type: '技能', label: '營運評分表', target: '90', levels: { A: '90↑', B: '80～89', C: '70～79', D: '70↓' }, weight: 20 },
+    { no: 4, key: 'stock', type: '技能', label: '盤點正確率', target: '100%', levels: { A: '100%', B: '95～99%', C: '90～94%', D: '89%↓' }, weight: 5 },
+    { no: 5, key: 'google', type: '技能', label: '當季度GOOGLE星級', target: '4.8', levels: { A: '4.8↑', B: '4.5~4.7', C: '4.2~4.4', D: '4.2↓' }, weight: 5 },
+    ftExec(6), ftExec(7), ftExec(8), ftExec(9), ftExec(10),
   ],
   '儲備幹部': [
-    { no: 1, key: 'sales', type: '技能', label: '營業額達成率', target: '100%', weight: 5 },
-    { no: 2, key: 'profit', type: '技能', label: '獲利率', target: '12%', weight: 5 },
-    { no: 3, key: 'opscore', type: '技能', label: '營運評分表', target: '90', weight: 10 },
-    { no: 4, key: 'cookerr', type: '技能', label: '餐點製作錯誤次數', target: '3次/季', weight: 15 },
-    { no: 5, key: 'packerr', type: '技能', label: '餐點包裝錯誤次數', target: '3次/季', weight: 10 },
-    { no: 6, key: 'exec6', type: '執行力', label: '', target: '', weight: 5 },
-    { no: 7, key: 'exec7', type: '執行力', label: '', target: '', weight: 5 },
-    { no: 8, key: 'exec8', type: '執行力', label: '', target: '', weight: 5 },
-    { no: 9, key: 'exec9', type: '執行力', label: '', target: '', weight: 5 },
-    { no: 10, key: 'exec10', type: '執行力', label: '', target: '', weight: 5 },
+    { no: 1, key: 'sales', type: '技能', label: '營業額達成率', target: '100%', levels: { A: '100%↑', B: '90～99%', C: '80～89%', D: '80%↓' }, weight: 5 },
+    { no: 2, key: 'profit', type: '技能', label: '獲利率', target: '12%', levels: { A: '12%↑', B: '7～11%', C: '2～6%', D: '2%↓' }, weight: 5 },
+    { no: 3, key: 'opscore', type: '技能', label: '營運評分表', target: '90', levels: { A: '90↑', B: '80～89', C: '70～79', D: '70↓' }, weight: 10 },
+    { no: 4, key: 'cookerr', type: '技能', label: '餐點製作錯誤次數', target: '3次/季', levels: { A: '3↓', B: '4～6', C: '7～15', D: '16↑' }, weight: 15 },
+    { no: 5, key: 'packerr', type: '技能', label: '餐點包裝錯誤次數', target: '3次/季', levels: { A: '3↓', B: '4～6', C: '7～15', D: '16↑' }, weight: 10 },
+    ftExec(6), ftExec(7), ftExec(8), ftExec(9), ftExec(10),
   ],
 };
 var FT_TITLES_SEED = { '蕭彣芳': '店長', '張羽成': '儲備幹部', '陳盈如': '儲備幹部' };
@@ -269,7 +262,9 @@ function readFtTemplates() {
     if (!title) continue;
     (out[title] = out[title] || []).push({
       no: v[i][1], key: String(v[i][2]), type: v[i][3],
-      label: v[i][4] || '', target: v[i][5] || '', weight: Number(v[i][6]) || 0,
+      label: v[i][4] || '', target: v[i][5] || '',
+      levels: { A: v[i][6] || '', B: v[i][7] || '', C: v[i][8] || '', D: v[i][9] || '' },
+      weight: Number(v[i][10]) || 0,
     });
   }
   return out;
@@ -289,12 +284,15 @@ function seedFtPerf() {
   let tpl = book.getSheetByName('正職表現範本');
   if (!tpl) tpl = book.insertSheet('正職表現範本');
   tpl.clear();
-  tpl.getRange(1, 1, 1, 7).setValues([['職稱', '項次', 'key', '類型', '項目內容', '目標值', '比重']]);
+  tpl.getRange(1, 1, 1, 11).setValues([['職稱', '項次', 'key', '類型', '項目內容', '目標值', 'A', 'B', 'C', 'D', '比重']]);
   const rows = [];
   Object.keys(FT_PERF_TEMPLATES).forEach((title) => {
-    FT_PERF_TEMPLATES[title].forEach((it) => rows.push([title, it.no, it.key, it.type, it.label, it.target, it.weight]));
+    FT_PERF_TEMPLATES[title].forEach((it) => {
+      const lv = it.levels || {};
+      rows.push([title, it.no, it.key, it.type, it.label, it.target, lv.A || '', lv.B || '', lv.C || '', lv.D || '', it.weight]);
+    });
   });
-  tpl.getRange(2, 1, rows.length, 7).setValues(rows);
+  tpl.getRange(2, 1, rows.length, 11).setValues(rows);
   let map = book.getSheetByName('正職職稱');
   if (!map) map = book.insertSheet('正職職稱');
   map.clear();
@@ -307,14 +305,18 @@ function seedFtPerf() {
 // p: { type:'ftTemplate', passcode, title, items:[{no,key,type,label,target,weight}] } — 覆寫某職稱整組項目
 function handleFtTemplate(p) {
   if (!checkPass(p.passcode)) return { ok: false, reason: 'unauthorized' };
+  const HEADER = ['職稱', '項次', 'key', '類型', '項目內容', '目標值', 'A', 'B', 'C', 'D', '比重'];
   let sh = ss().getSheetByName('正職表現範本');
-  if (!sh) { sh = ss().insertSheet('正職表現範本'); sh.getRange(1, 1, 1, 7).setValues([['職稱', '項次', 'key', '類型', '項目內容', '目標值', '比重']]); }
+  if (!sh) { sh = ss().insertSheet('正職表現範本'); sh.getRange(1, 1, 1, 11).setValues([HEADER]); }
   const v = sh.getDataRange().getValues();
-  const keep = [v[0] || ['職稱', '項次', 'key', '類型', '項目內容', '目標值', '比重']];
+  const keep = [HEADER];
   for (let i = 1; i < v.length; i++) if (v[i][0] && v[i][0] !== p.title) keep.push(v[i]);
-  (p.items || []).forEach((it, idx) => keep.push([p.title, it.no || idx + 1, it.key, it.type, it.label || '', it.target || '', Number(it.weight) || 0]));
+  (p.items || []).forEach((it, idx) => {
+    const lv = it.levels || {};
+    keep.push([p.title, it.no || idx + 1, it.key, it.type, it.label || '', it.target || '', lv.A || '', lv.B || '', lv.C || '', lv.D || '', Number(it.weight) || 0]);
+  });
   sh.clearContents();
-  sh.getRange(1, 1, keep.length, 7).setValues(keep);
+  sh.getRange(1, 1, keep.length, 11).setValues(keep);
   return { ok: true };
 }
 
