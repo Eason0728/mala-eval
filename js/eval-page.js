@@ -1,6 +1,6 @@
 import { login, fetchConfig, submitPeer, submitSelf, myScores, changePassword } from './api.js';
 import { splitPeerSubmission } from './validate.js';
-import { averageItems, round1, kpiItemScore } from './scoring.js';
+import { averageItems, round1, kpiItemScore, ftAttitudeScale, gradeFor, GRADE_TABLE } from './scoring.js';
 
 const state = { me: null, auth: null, config: null, ratings: new Map(), fillQuarter: null, self: null, selfQuarter: null };
 
@@ -299,11 +299,13 @@ function buildMyQuarters(data) {
   const byQuarter = {};
   const ensure = (q) => (byQuarter[q] = byQuarter[q] || {});
 
-  // 手動填的歷史成績（結果細項）：官方值，不拆自評/他評
+  // 手動填的歷史成績（結果細項）：官方值，不拆自評/他評（已是最終分，態度不再套係數）
   (data.seeded || []).forEach((row) => {
     const q = ensure(row.quarter);
-    const key = row.category === '態度' ? 'att' : 'perf';
-    (q[key] = q[key] || []).push({ label: row.label, score: row.score });
+    const isAtt = row.category === '態度';
+    const key = isAtt ? 'att' : 'perf';
+    const max = isAtt ? (role === '正職' ? 6 : 5) : (role === '計時' ? 5 : undefined);
+    (q[key] = q[key] || []).push({ label: row.label, score: row.score, cat: isAtt ? '職能態度' : '職能表現', max });
   });
 
   const recByQC = {};
@@ -314,7 +316,7 @@ function buildMyQuarters(data) {
   const selfByQC = {};
   (data.self || []).forEach((r) => { selfByQC[r.quarter] = selfByQC[r.quarter] || {}; selfByQC[r.quarter][r.category] = r.scores; });
   const spByQ = {};
-  (data.supervisorPerf || []).forEach((sp) => { spByQ[sp.quarter] = sp.sel || {}; });
+  (data.supervisorPerf || []).forEach((sp) => { spByQ[sp.quarter] = { sel: sp.sel || {}, actual: sp.actual || {} }; });
 
   const quarters = new Set([].concat(Object.keys(recByQC), Object.keys(selfByQC), Object.keys(spByQ)));
   quarters.forEach((q) => {
@@ -324,10 +326,13 @@ function buildMyQuarters(data) {
     const peerAtt = (recByQC[q] && recByQC[q]['態度']) || [];
     const selfAtt = selfByQC[q] && selfByQC[q]['態度'];
     if (peerAtt.length || selfAtt) {
+      // 正職態度每星×1.2（滿分30，每題6分）；計時維持原始 1–5（滿分30，每題5分）
+      const scale = role === '正職' ? ftAttitudeScale : (v) => v;
+      const attMax = role === '正職' ? 6 : 5;
       const off = averageItems(selfAtt ? peerAtt.concat([selfAtt]) : peerAtt);
-      qd.att = attBank.map((it, i) => ({ label: it.label, score: off[i], cat: '職能態度' }));
-      if (peerAtt.length) { const pa = averageItems(peerAtt); qd.attPeer = attBank.map((it, i) => ({ label: it.label, score: pa[i] })); }
-      if (selfAtt) qd.attSelf = attBank.map((it, i) => ({ label: it.label, score: selfAtt[i] }));
+      qd.att = attBank.map((it, i) => ({ label: it.label, score: scale(off[i]), cat: '職能態度', max: attMax }));
+      if (peerAtt.length) { const pa = averageItems(peerAtt); qd.attPeer = attBank.map((it, i) => ({ label: it.label, score: scale(pa[i]), max: attMax })); }
+      if (selfAtt) qd.attSelf = attBank.map((it, i) => ({ label: it.label, score: scale(selfAtt[i]), max: attMax }));
     }
     if (role === '計時') {
       const perfBank = bankFor('計時', 'perf');
@@ -335,17 +340,19 @@ function buildMyQuarters(data) {
       const selfPerf = selfByQC[q] && selfByQC[q]['表現'];
       if (peerPerf.length || selfPerf) {
         const off = averageItems(selfPerf ? peerPerf.concat([selfPerf]) : peerPerf);
-        qd.perf = perfBank.map((it, i) => ({ label: it.label, score: off[i], cat: '職能表現' }));
-        if (peerPerf.length) { const pp = averageItems(peerPerf); qd.perfPeer = perfBank.map((it, i) => ({ label: it.label, score: pp[i] })); }
-        if (selfPerf) qd.perfSelf = perfBank.map((it, i) => ({ label: it.label, score: selfPerf[i] }));
+        qd.perf = perfBank.map((it, i) => ({ label: it.label, score: off[i], cat: '職能表現', max: 5 }));
+        if (peerPerf.length) { const pp = averageItems(peerPerf); qd.perfPeer = perfBank.map((it, i) => ({ label: it.label, score: pp[i], max: 5 })); }
+        if (selfPerf) qd.perfSelf = perfBank.map((it, i) => ({ label: it.label, score: selfPerf[i], max: 5 }));
       }
     } else if (role === '正職' && spByQ[q]) {
       // 正職職能表現＝依本人職稱範本，每項 比重×等級%（執行力完成=比重、未完成=0）
       const tpl = data.ftTemplate || [];
-      const sel = spByQ[q];
+      const sel = spByQ[q].sel || {};
+      const act = spByQ[q].actual || {};
       const perfItems = tpl.map((it) => ({
         label: it.label || `第${it.no}項`, score: kpiItemScore(it, sel[it.key]),
         cat: it.type === '執行力' ? '個人執行力內容（執行力）' : '個人工作技能（技能）',
+        max: Number(it.weight) || 0, actual: act[it.key], target: it.target, sel: sel[it.key], type: it.type,
       }));
       if (tpl.length && perfItems.every((p) => p.score !== null)) qd.perf = perfItems;
     }
@@ -401,6 +408,70 @@ function compareBlock(title, labels, series1, series2, name1, name2, cats) {
   }).join('');
   return `<div class="card"><b>${title}</b>${chart}
     <table><tr><th>項目</th><th>${name2}</th><th>${name1}</th><th>差</th></tr>${rows}</table></div>`;
+}
+
+// 細項分數表（我的成績專用）：分類標題含配分、每分類下方小計、最下方三分類總加總；
+// KPI 項目附「目標值／實際值」副行，讓同仁看見問題點。cur/prev 項目物件帶 {label,score,cat,max,actual,target}。
+function detailBlock(title, prevItems, curItems, name1, name2, curFinal, prevFinal) {
+  const labels = curItems.map((x) => x.label);
+  const s1 = labels.map((lb) => { const f = prevItems.find((x) => x.label === lb); return f ? f.score : null; });
+  const s2 = curItems.map((x) => x.score);
+  const yMax = Math.max(6, Math.ceil(Math.max.apply(null, s1.concat(s2).filter((v) => v !== null).concat([6]))));
+  const chart = lineChart(labels, s1.every((v) => v !== null) ? s1 : null, s2, name1, name2, yMax);
+  const cats = [];
+  curItems.forEach((it) => { const c = it.cat || '其他'; if (!cats.includes(c)) cats.push(c); });
+  const cfgTxt = (n) => (n ? `<span class="muted"> / ${round1(n)}</span>` : '');
+  const HEAD = 'text-align:left;background:#fff6f2;font-weight:700;color:var(--brand-dark)';
+  const SUB = 'background:#faf7f5;font-weight:600';
+  const GRAND = 'background:var(--brand-dark);color:#fff;font-weight:700';
+  let gCur = 0; let gPrev = 0; let gPrevHas = false; let gMax = 0; let body = '';
+  cats.forEach((c) => {
+    const items = curItems.filter((it) => (it.cat || '其他') === c);
+    const cfg = items.reduce((a, b) => a + (Number(b.max) || 0), 0);
+    body += `<tr><td colspan="4" style="${HEAD}">${escapeHtml(c)}${cfg ? `（滿分 ${round1(cfg)} 分）` : ''}</td></tr>`;
+    let subCur = 0; let subPrev = 0; let subPrevHas = false;
+    items.forEach((it) => {
+      const i = labels.indexOf(it.label);
+      const cur = it.score; const prev = s1[i];
+      if (cur !== null && cur !== undefined) subCur += cur;
+      if (prev !== null && prev !== undefined) { subPrev += prev; subPrevHas = true; }
+      const hasMeta = (it.target !== undefined && it.target !== '') || (it.actual !== undefined && it.actual !== '');
+      const meta = hasMeta
+        ? `<div class="muted" style="font-size:.8em;margin-top:2px">🎯 目標 ${escapeHtml(String(it.target ?? '—'))}｜實際 <b style="color:var(--brand)">${escapeHtml(String(it.actual ?? '—'))}</b></div>`
+        : '';
+      body += `<tr><td style="text-align:left">${i + 1}. ${escapeHtml(it.label)}${meta}</td>`
+        + `<td>${numText(cur)}${cfgTxt(it.max)}</td><td>${numText(prev)}</td><td>${diffText(cur, prev)}</td></tr>`;
+    });
+    body += `<tr><td style="text-align:left;${SUB}">小計</td>`
+      + `<td style="${SUB}"><b>${round1(subCur)}</b>${cfgTxt(cfg)}</td>`
+      + `<td style="${SUB}">${subPrevHas ? round1(subPrev) : '—'}</td>`
+      + `<td style="${SUB}">${diffText(subCur, subPrevHas ? subPrev : null)}</td></tr>`;
+    gCur += subCur; if (subPrevHas) { gPrev += subPrev; gPrevHas = true; } gMax += cfg;
+  });
+  // 等第依實際分數（含主管加減分）判定；未提供時退回細項總分
+  const gc = gradeFor(curFinal !== undefined && curFinal !== null ? curFinal : gCur);
+  const gp = gradeFor(prevFinal !== undefined && prevFinal !== null ? prevFinal : (gPrevHas ? gPrev : null));
+  const gTxt = (g) => (g ? `<span style="display:inline-block;margin-left:6px;padding:1px 7px;border-radius:10px;background:#fff;color:var(--brand-dark);font-weight:800">${g.grade} 等</span>` : '');
+  body += `<tr><td style="text-align:left;${GRAND}">總分（態度＋表現）</td>`
+    + `<td style="${GRAND}"><b>${round1(gCur)}</b>${gMax ? `<span style="opacity:.75"> / ${round1(gMax)}</span>` : ''}${gTxt(gc)}</td>`
+    + `<td style="${GRAND}">${gPrevHas ? round1(gPrev) : '—'}${gTxt(gp)}</td>`
+    + `<td style="${GRAND}">${diffText(gCur, gPrevHas ? gPrev : null)}</td></tr>`;
+  return `<div class="card"><b>${title}</b>${chart}
+    <table><tr><th>項目</th><th>${name2}</th><th>${name1}</th><th>差</th></tr>${body}</table>
+    <div class="muted" style="font-size:.8em;margin-top:6px">總分為態度＋表現、未含主管加減分；含加減分後的最終分（＝等第依據）請看上方「各季小計」。</div></div>`;
+}
+
+// 考核等第 × 獎金發放基數對照表；highlight 本季所屬等第。
+function gradeTableBlock(curScore) {
+  const cur = gradeFor(curScore);
+  const rows = GRADE_TABLE.map((g) => {
+    const on = cur && g.grade === cur.grade;
+    const st = on ? 'background:#fff1c9;font-weight:700' : '';
+    return `<tr style="${st}"><td>${g.grade} 等${on ? ' ◀ 本季' : ''}</td><td>${g.range}</td><td>${g.baseText}</td></tr>`;
+  }).join('');
+  return `<div class="card"><b>🏅 考核等第 × 獎金發放基數</b>
+    <table><tr><th>考核等第</th><th>分數區間</th><th>實領發放基數</th></tr>${rows}</table>
+    <div class="muted" style="font-size:.8em;margin-top:6px">備註：因考核等第未分配之獎金，將直接回流至公司當季盈餘，不另行累積或留用。</div></div>`;
 }
 
 async function renderScores() {
@@ -495,9 +566,9 @@ async function renderScores() {
 
   // 最新一季 vs 前一季（官方值），直接標季度名稱避免「當季」誤解
   const trendTitle = prevQ ? `細項分數：${qLabel(curQ)} vs ${qLabel(prevQ)}` : `細項分數：${qLabel(curQ)}`;
-  const trend = compareBlock(trendTitle, official(curQ).map((x) => x.label),
-    prevQ ? official(prevQ) : [], official(curQ), prevQ ? qLabel(prevQ) : '前一季（無資料）', qLabel(curQ),
-    official(curQ).map((x) => x.cat));
+  const trend = detailBlock(trendTitle, prevQ ? official(prevQ) : [], official(curQ),
+    prevQ ? qLabel(prevQ) : '前一季（無資料）', qLabel(curQ),
+    qTotal(curQ), prevQ ? qTotal(prevQ) : null);
 
   // 自評 vs 他評（當季）
   let selfCompare = '';
@@ -521,7 +592,8 @@ async function renderScores() {
     wageTable = `<div class="card"><b>💰 分數落點時薪對照</b><table><tr><th>實際分數</th><th>時薪</th></tr>${tiers.map(([r, w]) => `<tr><td>${escapeHtml(r)}</td><td>${escapeHtml(w)}</td></tr>`).join('')}</table></div>`;
   }
 
-  pane.innerHTML = pendingNote + msgBlock + table + selfCompare + trend + wageTable;
+  const gradeTable = gradeTableBlock(qTotal(curQ));
+  pane.innerHTML = pendingNote + msgBlock + table + selfCompare + trend + wageTable + gradeTable;
 }
 
 // ===== 分頁切換 =====

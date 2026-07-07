@@ -2,8 +2,32 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   raterTotal, averageTotals, averageItems, round1, finalScore, aggregateRatee,
-  kpiItemScore, kpiTotal,
+  kpiItemScore, kpiTotal, ftAttitudeScale, gradeFor,
 } from '../js/scoring.js';
+
+test('gradeFor 考核等第邊界與基數', () => {
+  assert.equal(gradeFor(90).grade, 'A');
+  assert.equal(gradeFor(85).grade, 'A');
+  assert.equal(gradeFor(84.9).grade, 'B');
+  assert.equal(gradeFor(75).grade, 'B');
+  assert.equal(gradeFor(74).grade, 'C');
+  assert.equal(gradeFor(65).grade, 'C');
+  assert.equal(gradeFor(64).grade, 'D');
+  assert.equal(gradeFor(0).grade, 'D');
+  assert.equal(gradeFor(null), null);
+  assert.equal(gradeFor(85).base, 1);
+  assert.equal(gradeFor(80).base, 0.7);
+  assert.equal(gradeFor(70).base, 0.5);
+  assert.equal(gradeFor(50).base, 0);
+});
+
+test('ftAttitudeScale 正職態度每星×1.2（滿分30）；null 保持 null', () => {
+  assert.equal(ftAttitudeScale(5), 6);      // 每題滿分
+  assert.equal(round1(ftAttitudeScale(3)), 3.6);
+  assert.equal(round1(ftAttitudeScale(14.7)), 17.6); // 5 題合計 14.7 → 17.6（滿分30）
+  assert.equal(ftAttitudeScale(null), null);
+  assert.equal(ftAttitudeScale(undefined), undefined);
+});
 
 test('averageItems 每題平均；加總等於 averageTotals；空回 null', () => {
   assert.deepEqual(averageItems([[5, 4], [3, 4]]), [4, 4]);

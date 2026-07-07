@@ -2,7 +2,7 @@ import {
   fetchAdminData, submitAdjust, submitSupervisorPerf, submitSupervisorFeedback,
   submitFtTemplate, submitFtTitle,
 } from './api.js';
-import { round1, raterTotal, averageTotals, finalScore, kpiTotal } from './scoring.js';
+import { round1, raterTotal, averageTotals, finalScore, kpiTotal, ftAttitudeScale } from './scoring.js';
 
 // 取某正職的職稱範本項目
 function ftItemsFor(ratee) {
@@ -136,7 +136,9 @@ function buildRows() {
     const perfList = perfMap.get(a.name);
     const adj = adjBy.get(a.name) || {};
     // 態度：優先互評紀錄平均，否則用手動填的加總
+    // 正職態度每星×1.2（滿分30）；計時維持原始。手動填的歷史值已是最終分、不再套係數。
     let attitude = averageTotals(attList);
+    if (attitude !== null && a.role === '正職') attitude = ftAttitudeScale(attitude);
     let attManual = false;
     if (attitude === null && seedAtt.has(a.name)) { attitude = seedAtt.get(a.name); attManual = true; }
     // 表現：正職=主管評分；計時=全員互評平均；皆無則用手動填
@@ -221,8 +223,11 @@ function renderDetail(ratee) {
   const fb = fbRow ? fbRow.text : '';
   const selfAtt = (DATA.selfRecords || []).find((s) => s.ratee === ratee && s.category === '態度');
   const selfPerf = (DATA.selfRecords || []).find((s) => s.ratee === ratee && s.category === '表現');
+  const selfAttVal = selfAtt
+    ? round1(row.role === '正職' ? ftAttitudeScale(raterTotal(selfAtt.scores)) : raterTotal(selfAtt.scores))
+    : '—';
   const selfLine = (selfAtt || selfPerf)
-    ? `<div class="muted">自評：態度 ${selfAtt ? round1(raterTotal(selfAtt.scores)) : '—'}｜表現 ${selfPerf ? round1(raterTotal(selfPerf.scores)) : '—'}（已含進上方實際分數）</div>`
+    ? `<div class="muted">自評：態度 ${selfAttVal}｜表現 ${selfPerf ? round1(raterTotal(selfPerf.scores)) : '—'}（已含進上方實際分數）</div>`
     : '<div class="muted">自評：尚未填</div>';
   document.getElementById('detail').innerHTML = `
     <b>${ratee}（${row.role}） 明細</b>

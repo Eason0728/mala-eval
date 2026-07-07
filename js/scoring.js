@@ -39,6 +39,29 @@ export function finalScore({ attitude, attitudeAdjust = 0, performance = null, p
   return { score: attitudePart + performance + performanceAdjust, performanceCounted: true };
 }
 
+// ===== 考核等第 × 實領獎金發放基數 =====
+// 依實際分數（滿分 100）判等第；未分配獎金回流公司當季盈餘。
+export const GRADE_TABLE = [
+  { grade: 'A', min: 85, base: 1, range: '85 分以上', baseText: '1（全額領取）' },
+  { grade: 'B', min: 75, base: 0.7, range: '75 分 ~ 84 分', baseText: '0.7（領取七成）' },
+  { grade: 'C', min: 65, base: 0.5, range: '65 分 ~ 74 分', baseText: '0.5（領取五成）' },
+  { grade: 'D', min: 0, base: 0, range: '64 分以下', baseText: '0（不領取）' },
+];
+// 回傳 { grade, min, base, range, baseText }；分數為 null/未計 → null。
+export function gradeFor(score) {
+  if (score === null || score === undefined) return null;
+  return GRADE_TABLE.find((g) => score >= g.min) || GRADE_TABLE[GRADE_TABLE.length - 1];
+}
+
+// ===== 正職職能態度（滿分 30）=====
+// 正職態度為 5 題、每題滿分 6（一顆星＝1.2 分）→ 滿分 30，與「態度佔 30%」一致。
+// 計時態度為 6 題原始 1–5 分（滿分 30），不套用此係數。
+// 不在此四捨五入：由顯示層 round1，確保細項與小計一致（線性）。
+export const FT_ATTITUDE_STAR_FACTOR = 1.2;
+export function ftAttitudeScale(v) {
+  return v === null || v === undefined ? v : v * FT_ATTITUDE_STAR_FACTOR;
+}
+
 // ===== 正職職能表現（加權 KPI）=====
 // 技能項：等級 A/B/C/D = 100/80/60/40%，得分 = 比重 × %。
 // 執行力項：完成 = 比重全拿（100%）、未完成 = 0。
