@@ -18,22 +18,30 @@ function ftPerfFor(ratee) {
 const KPI_LEVELS = { 技能: ['A', 'B', 'C', 'D'], 執行力: ['完成', '未完成'] };
 const KPI_LEVEL_LABEL = { A: 'A（100%）', B: 'B（80%）', C: 'C（60%）', D: 'D（40%）', 完成: '完成', 未完成: '未完成' };
 
-// 評分列：項目名（比重）＋衡量標準｜等級下拉｜實際值
+// 評分列：依分類（技能/執行力）分組，每組前加分類標題列；項目名（比重）＋衡量標準｜等級下拉｜實際值
+const KPI_CAT_LABEL = { 技能: '個人工作技能（技能）', 執行力: '個人執行力內容（執行力）' };
 function ftScoreRowsHtml(items, sel, actual) {
-  return items.map((it) => {
+  let out = '';
+  let prevType = null;
+  for (const it of items) {
+    if (it.type !== prevType) {
+      out += `<tr><td colspan="3" style="text-align:left;background:#fff6f2;font-weight:700;color:var(--brand-dark)">${esc(KPI_CAT_LABEL[it.type] || it.type)}</td></tr>`;
+      prevType = it.type;
+    }
     const opts = KPI_LEVELS[it.type] || KPI_LEVELS['技能'];
     const cur = sel[it.key] || '';
     const label = it.label || `（第${it.no}項，未命名）`;
     const lv = it.levels || {};
     const std = (it.type === '技能' && (lv.A || lv.B || lv.C || lv.D))
       ? `<div class="muted" style="font-size:.82em">A:${esc(lv.A || '-')}　B:${esc(lv.B || '-')}　C:${esc(lv.C || '-')}　D:${esc(lv.D || '-')}</div>` : '';
-    return `<tr>
+    out += `<tr>
       <td style="text-align:left">${it.no}. ${esc(label)} <span class="muted">比重${it.weight}</span>${std}</td>
       <td><select data-sel="${esc(it.key)}"><option value="">—</option>${opts.map((o) =>
     `<option value="${o}" ${cur === o ? 'selected' : ''}>${KPI_LEVEL_LABEL[o] || o}</option>`).join('')}</select></td>
       <td><input data-actual="${esc(it.key)}" value="${esc(actual[it.key] || '')}" placeholder="實際值" style="width:88px"></td>
     </tr>`;
-  }).join('');
+  }
+  return out;
 }
 // 範本編輯列（每項一小塊：基本欄＋衡量標準A/B/C/D。key 存 data 屬性、新列存檔時自動產生）
 function ftEditorRowHtml(it, i) {
