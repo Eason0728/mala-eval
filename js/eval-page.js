@@ -325,7 +325,7 @@ function buildMyQuarters(data) {
     const selfAtt = selfByQC[q] && selfByQC[q]['態度'];
     if (peerAtt.length || selfAtt) {
       const off = averageItems(selfAtt ? peerAtt.concat([selfAtt]) : peerAtt);
-      qd.att = attBank.map((it, i) => ({ label: it.label, score: off[i] }));
+      qd.att = attBank.map((it, i) => ({ label: it.label, score: off[i], cat: '職能態度' }));
       if (peerAtt.length) { const pa = averageItems(peerAtt); qd.attPeer = attBank.map((it, i) => ({ label: it.label, score: pa[i] })); }
       if (selfAtt) qd.attSelf = attBank.map((it, i) => ({ label: it.label, score: selfAtt[i] }));
     }
@@ -335,7 +335,7 @@ function buildMyQuarters(data) {
       const selfPerf = selfByQC[q] && selfByQC[q]['表現'];
       if (peerPerf.length || selfPerf) {
         const off = averageItems(selfPerf ? peerPerf.concat([selfPerf]) : peerPerf);
-        qd.perf = perfBank.map((it, i) => ({ label: it.label, score: off[i] }));
+        qd.perf = perfBank.map((it, i) => ({ label: it.label, score: off[i], cat: '職能表現' }));
         if (peerPerf.length) { const pp = averageItems(peerPerf); qd.perfPeer = perfBank.map((it, i) => ({ label: it.label, score: pp[i] })); }
         if (selfPerf) qd.perfSelf = perfBank.map((it, i) => ({ label: it.label, score: selfPerf[i] }));
       }
@@ -343,7 +343,10 @@ function buildMyQuarters(data) {
       // 正職職能表現＝依本人職稱範本，每項 比重×等級%（執行力完成=比重、未完成=0）
       const tpl = data.ftTemplate || [];
       const sel = spByQ[q];
-      const perfItems = tpl.map((it) => ({ label: it.label || `第${it.no}項`, score: kpiItemScore(it, sel[it.key]) }));
+      const perfItems = tpl.map((it) => ({
+        label: it.label || `第${it.no}項`, score: kpiItemScore(it, sel[it.key]),
+        cat: it.type === '執行力' ? '個人執行力內容（執行力）' : '個人工作技能（技能）',
+      }));
       if (tpl.length && perfItems.every((p) => p.score !== null)) qd.perf = perfItems;
     }
   });
@@ -381,12 +384,21 @@ function lineChart(labels, s1, s2, name1, name2, yMax) {
   </svg></div>`;
 }
 
-function compareBlock(title, labels, series1, series2, name1, name2) {
+// cats（可選）：與 labels 對齊的分類名陣列；分類變換處插一列分類標題（如職能態度／個人工作技能（技能））
+function compareBlock(title, labels, series1, series2, name1, name2, cats) {
   const s1 = labels.map((lb) => { const f = series1.find((x) => x.label === lb); return f ? f.score : null; });
   const s2 = labels.map((lb) => { const f = series2.find((x) => x.label === lb); return f ? f.score : null; });
   const yMax = Math.max(5, Math.ceil(Math.max.apply(null, s1.concat(s2).filter((v) => v !== null).concat([5]))));
   const chart = lineChart(labels, s1.every((v) => v !== null) ? s1 : null, s2, name1, name2, yMax);
-  const rows = labels.map((lb, i) => `<tr><td style="text-align:left">${i + 1}. ${lb}</td><td>${numText(s2[i])}</td><td>${numText(s1[i])}</td><td>${diffText(s2[i], s1[i])}</td></tr>`).join('');
+  let prevCat = null;
+  const rows = labels.map((lb, i) => {
+    let head = '';
+    if (cats && cats[i] && cats[i] !== prevCat) {
+      head = `<tr><td colspan="4" style="text-align:left;background:#fff6f2;font-weight:700;color:var(--brand-dark)">${escapeHtml(cats[i])}</td></tr>`;
+      prevCat = cats[i];
+    }
+    return `${head}<tr><td style="text-align:left">${i + 1}. ${lb}</td><td>${numText(s2[i])}</td><td>${numText(s1[i])}</td><td>${diffText(s2[i], s1[i])}</td></tr>`;
+  }).join('');
   return `<div class="card"><b>${title}</b>${chart}
     <table><tr><th>項目</th><th>${name2}</th><th>${name1}</th><th>差</th></tr>${rows}</table></div>`;
 }
@@ -484,7 +496,8 @@ async function renderScores() {
   // 最新一季 vs 前一季（官方值），直接標季度名稱避免「當季」誤解
   const trendTitle = prevQ ? `細項分數：${qLabel(curQ)} vs ${qLabel(prevQ)}` : `細項分數：${qLabel(curQ)}`;
   const trend = compareBlock(trendTitle, official(curQ).map((x) => x.label),
-    prevQ ? official(prevQ) : [], official(curQ), prevQ ? qLabel(prevQ) : '前一季（無資料）', qLabel(curQ));
+    prevQ ? official(prevQ) : [], official(curQ), prevQ ? qLabel(prevQ) : '前一季（無資料）', qLabel(curQ),
+    official(curQ).map((x) => x.cat));
 
   // 自評 vs 他評（當季）
   let selfCompare = '';
