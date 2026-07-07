@@ -127,7 +127,7 @@ function currentQuarter() {
 
 function publicConfig() {
   return {
-    ver: 12, // 部署版本標記，方便 curl 驗證新版是否生效（10 作廢；11→12 加 KPI 衡量標準A/B/C/D）
+    ver: 13, // 部署版本標記（13：範本分頁首次讀取自動建立，免手動跑 seedFtPerf）
     quarter: currentQuarter(),
     accounts: readAccounts().map((a) => ({ name: a.name, role: a.role })),
     banks: {
@@ -253,7 +253,8 @@ var FT_PERF_TEMPLATES = {
 var FT_TITLES_SEED = { '蕭彣芳': '店長', '張羽成': '儲備幹部', '陳盈如': '儲備幹部' };
 
 function readFtTemplates() {
-  const sh = ss().getSheetByName('正職表現範本');
+  let sh = ss().getSheetByName('正職表現範本');
+  if (!sh) { seedFtPerf(); sh = ss().getSheetByName('正職表現範本'); } // 首次讀取自動建立＋種子
   if (!sh) return {};
   const v = sh.getDataRange().getValues();
   const out = {};
@@ -270,7 +271,8 @@ function readFtTemplates() {
   return out;
 }
 function readFtTitles() {
-  const sh = ss().getSheetByName('正職職稱');
+  let sh = ss().getSheetByName('正職職稱');
+  if (!sh) { seedFtPerf(); sh = ss().getSheetByName('正職職稱'); } // 首次讀取自動建立＋種子
   if (!sh) return {};
   const v = sh.getDataRange().getValues();
   const out = {};
