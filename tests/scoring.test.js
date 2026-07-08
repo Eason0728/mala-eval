@@ -2,8 +2,22 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   raterTotal, averageTotals, averageItems, round1, finalScore, aggregateRatee,
-  kpiItemScore, kpiTotal, ftAttitudeScale, gradeFor,
+  kpiItemScore, kpiTotal, ftAttitudeScale, gradeFor, wageTierIndex,
 } from '../js/scoring.js';
+
+test('wageTierIndex 分數落點時薪級距（下限門檻、容小數）', () => {
+  const tiers = [['96 分以上', '340'], ['91～95 分', '300'], ['86～90 分', '280'],
+    ['81～85 分', '230'], ['76～80 分', '220'], ['71～75 分', '210'],
+    ['66～70 分', '205'], ['65 分以下', '法定時薪']];
+  assert.equal(wageTierIndex(tiers, 98), 0);
+  assert.equal(wageTierIndex(tiers, 96), 0);
+  assert.equal(wageTierIndex(tiers, 95), 1);
+  assert.equal(wageTierIndex(tiers, 83.4), 3);
+  assert.equal(wageTierIndex(tiers, 66), 6);
+  assert.equal(wageTierIndex(tiers, 65), 7);
+  assert.equal(wageTierIndex(tiers, 40), 7);
+  assert.equal(wageTierIndex(tiers, null), -1);
+});
 
 test('gradeFor 考核等第邊界與基數', () => {
   assert.equal(gradeFor(90).grade, 'A');

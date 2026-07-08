@@ -53,6 +53,27 @@ export function gradeFor(score) {
   return GRADE_TABLE.find((g) => score >= g.min) || GRADE_TABLE[GRADE_TABLE.length - 1];
 }
 
+// 分數落點 → 時薪級距 index（計時用）。tiers：[[區間文字, 時薪], ...]（自試算表，區間自由文字，
+// 如 '96 分以上'／'81～85 分'／'65 分以下'）。以「下限門檻」判定：回傳門檻 ≤ 分數且門檻最高那列；
+// 分數 null 或無列 → -1。可容忍小數（85.5 落在 81～85）。
+export function wageTierIndex(tiers, score) {
+  if (score === null || score === undefined || !Array.isArray(tiers)) return -1;
+  let best = -1;
+  let bestLow = -Infinity;
+  tiers.forEach((row, i) => {
+    const s = String((row && row[0]) || '');
+    const nums = (s.match(/\d+(?:\.\d+)?/g) || []).map(Number);
+    let low;
+    if (/以下|以內/.test(s)) low = -Infinity;
+    else if (/以上/.test(s)) low = nums.length ? nums[0] : -Infinity;
+    else if (nums.length >= 2) low = Math.min(nums[0], nums[1]);
+    else if (nums.length === 1) low = nums[0];
+    else low = -Infinity;
+    if (low <= score && low >= bestLow) { best = i; bestLow = low; }
+  });
+  return best;
+}
+
 // ===== 正職職能態度（滿分 30）=====
 // 正職態度為 5 題、每題滿分 6（一顆星＝1.2 分）→ 滿分 30，與「態度佔 30%」一致。
 // 計時態度為 6 題原始 1–5 分（滿分 30），不套用此係數。

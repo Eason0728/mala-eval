@@ -1,6 +1,6 @@
 import { login, fetchConfig, submitPeer, submitSelf, myScores, changePassword } from './api.js';
 import { splitPeerSubmission } from './validate.js';
-import { averageItems, round1, kpiItemScore, ftAttitudeScale, gradeFor, GRADE_TABLE } from './scoring.js';
+import { averageItems, round1, kpiItemScore, ftAttitudeScale, gradeFor, GRADE_TABLE, wageTierIndex } from './scoring.js';
 
 const state = { me: null, auth: null, config: null, ratings: new Map(), fillQuarter: null, self: null, selfQuarter: null };
 
@@ -412,7 +412,7 @@ function compareBlock(title, labels, series1, series2, name1, name2, cats) {
 
 // 細項分數表（我的成績專用）：分類標題含配分、每分類下方小計、最下方三分類總加總；
 // KPI 項目附「目標值／實際值」副行，讓同仁看見問題點。cur/prev 項目物件帶 {label,score,cat,max,actual,target}。
-function detailBlock(title, prevItems, curItems, name1, name2, curFinal, prevFinal) {
+function detailBlock(title, prevItems, curItems, name1, name2, curFinal, prevFinal, showGrade) {
   const labels = curItems.map((x) => x.label);
   const s1 = labels.map((lb) => { const f = prevItems.find((x) => x.label === lb); return f ? f.score : null; });
   const s2 = curItems.map((x) => x.score);
@@ -448,10 +448,10 @@ function detailBlock(title, prevItems, curItems, name1, name2, curFinal, prevFin
       + `<td style="${SUB}">${diffText(subCur, subPrevHas ? subPrev : null)}</td></tr>`;
     gCur += subCur; if (subPrevHas) { gPrev += subPrev; gPrevHas = true; } gMax += cfg;
   });
-  // 等第依實際分數（含主管加減分）判定；未提供時退回細項總分
+  // 等第僅正職顯示（計時看時薪對照表）；依實際分數（含主管加減分）判定，未提供時退回細項總分
   const gc = gradeFor(curFinal !== undefined && curFinal !== null ? curFinal : gCur);
   const gp = gradeFor(prevFinal !== undefined && prevFinal !== null ? prevFinal : (gPrevHas ? gPrev : null));
-  const gTxt = (g) => (g ? `<span style="display:inline-block;margin-left:6px;padding:1px 7px;border-radius:10px;background:#fff;color:var(--brand-dark);font-weight:800">${g.grade} 等</span>` : '');
+  const gTxt = (g) => (showGrade && g ? `<span style="display:inline-block;margin-left:6px;padding:1px 7px;border-radius:10px;background:#fff;color:var(--brand-dark);font-weight:800">${g.grade} 等</span>` : '');
   body += `<tr><td style="text-align:left;${GRAND}">總分（態度＋表現）</td>`
     + `<td style="${GRAND}"><b>${round1(gCur)}</b>${gMax ? `<span style="opacity:.75"> / ${round1(gMax)}</span>` : ''}${gTxt(gc)}</td>`
     + `<td style="${GRAND}">${gPrevHas ? round1(gPrev) : '—'}${gTxt(gp)}</td>`
@@ -568,7 +568,7 @@ async function renderScores() {
   const trendTitle = prevQ ? `細項分數：${qLabel(curQ)} vs ${qLabel(prevQ)}` : `細項分數：${qLabel(curQ)}`;
   const trend = detailBlock(trendTitle, prevQ ? official(prevQ) : [], official(curQ),
     prevQ ? qLabel(prevQ) : '前一季（無資料）', qLabel(curQ),
-    qTotal(curQ), prevQ ? qTotal(prevQ) : null);
+    qTotal(curQ), prevQ ? qTotal(prevQ) : null, data.role === '正職');
 
   // 自評 vs 他評（當季）
   let selfCompare = '';
@@ -589,10 +589,19 @@ async function renderScores() {
     ];
     const tiers = (state.config && Array.isArray(state.config.wageTiers) && state.config.wageTiers.length)
       ? state.config.wageTiers : DEFAULT_TIERS;
-    wageTable = `<div class="card"><b>💰 分數落點時薪對照</b><table><tr><th>實際分數</th><th>時薪</th></tr>${tiers.map(([r, w]) => `<tr><td>${escapeHtml(r)}</td><td>${escapeHtml(w)}</td></tr>`).join('')}</table></div>`;
+    const myScore = qTotal(curQ);           // 當季實際分數（含主管調整）
+    const hi = wageTierIndex(tiers, myScore); // 落點列，黃底標示
+    const wageRows = tiers.map(([r, w], i) => {
+      const on = i === hi;
+      const st = on ? ' style="background:#fff1c9;font-weight:700"' : '';
+      const mark = on && myScore !== null ? ` ◀ 本季 ${round1(myScore)} 分` : '';
+      return `<tr${st}><td>${escapeHtml(r)}${mark}</td><td>${escapeHtml(w)}</td></tr>`;
+    }).join('');
+    wageTable = `<div class="card"><b>💰 分數落點時薪對照</b><table><tr><th>實際分數</th><th>時薪</th></tr>${wageRows}</table></div>`;
   }
 
-  const gradeTable = gradeTableBlock(qTotal(curQ));
+  // 考核等第（＋獎金基數表）僅正職顯示；計時看上方時薪對照表
+  const gradeTable = data.role === '正職' ? gradeTableBlock(qTotal(curQ)) : '';
   pane.innerHTML = pendingNote + msgBlock + table + selfCompare + trend + wageTable + gradeTable;
 }
 
