@@ -4,34 +4,68 @@
   --gold: #ffd803;        /* 火焰金 */
   --gold-deep: #f7a50a;
   --ink: #241a15;         /* 近黑（暖） */
-  --bg: #f4f4f5;          /* 淺灰 */
-  --card: #ffffff;
-  --line: #f0dbd1;
-  --muted: #9c8b83;
+  --bg: #a81f08;          /* 深品牌紅（頁面底） */
+  --card: #fffdf8;        /* 微暖白卡片 */
+  --line: #eadcc8;        /* 暖色邊線 */
+  --muted: #a08b72;       /* 暖褐灰 */
 }
 * { box-sizing: border-box; }
 body {
   margin: 0; color: var(--ink);
   font-family: "PingFang TC", "Noto Sans TC", system-ui, sans-serif;
-  background: var(--bg);
+  background: radial-gradient(120% 90% at 50% 16%, #c9290b 0%, #a81f08 55%, #8a1906 100%) fixed;
   -webkit-font-smoothing: antialiased;
 }
-.wrap { max-width: 780px; margin: 0 auto; padding: 16px 16px 48px; }
+.wrap { max-width: 780px; margin: 0 auto; padding: 16px 16px 48px; position: relative; z-index: 1; }
 
-/* 品牌頁首 */
+/* ---- 背景真實火焰影片（黑底以 screen 混合去除）＋暖色暈影 ---- */
+.fireVid {
+  position: fixed; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; object-position: center; z-index: 0; pointer-events: none;
+  mix-blend-mode: screen; filter: brightness(1.5) saturate(1.08) contrast(1.05);
+}
+.scrim {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(85% 74% at 50% 44%, rgba(42,11,3,0) 0%, rgba(34,9,3,.14) 60%, rgba(20,5,1,.4) 100%);
+}
+
+/* 品牌頁首（紅招牌 hero：emblem＋店名＋麻辣緞帶＋波浪下緣） */
 .app-header {
+  position: relative; overflow: hidden;
   background: var(--brand);
   border-radius: 18px;
-  padding: 20px 16px 16px;
-  text-align: center;
+  padding: 22px 20px 34px;
+  text-align: left;
   margin: 6px 0 20px;
-  box-shadow: 0 10px 26px rgba(234, 52, 12, .20);
+  box-shadow: 0 18px 40px -18px rgba(40, 7, 3, .55);
 }
-.brand-logo { height: 56px; display: block; margin: 0 auto; }
+.app-header::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 22px; background: var(--card);
+  -webkit-mask: radial-gradient(12px 17px at 12px -5px, transparent 98%, #000) repeat-x;
+  mask: radial-gradient(12px 17px at 12px -5px, transparent 98%, #000) repeat-x;
+  -webkit-mask-size: 24px 22px; mask-size: 24px 22px;
+}
+.ribbon {
+  position: absolute; top: 14px; right: -42px; transform: rotate(45deg);
+  background: var(--gold); color: var(--brand-dark);
+  font-weight: 900; font-size: 12px; letter-spacing: .28em; padding: 5px 46px;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, .16);
+}
+.lockup { display: flex; align-items: center; gap: 14px; }
+.brand-emblem {
+  height: 62px; width: auto; display: block;
+  filter: drop-shadow(0 0 14px rgba(255, 216, 3, .5)) drop-shadow(0 4px 8px rgba(0, 0, 0, .22));
+  animation: bob 3.4s ease-in-out infinite; transform-origin: 50% 90%;
+}
+@keyframes bob { 0%, 100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-3px) rotate(-1.2deg); } }
+.brand-name { color: #fff; font-weight: 900; font-size: 23px; letter-spacing: .05em; line-height: 1.1; }
 .app-subtitle {
-  color: #fff; font-weight: 800; letter-spacing: 6px;
-  font-size: 15px; margin-top: 10px; padding-left: 6px;
+  color: rgba(255, 255, 255, .88); font-weight: 700; letter-spacing: 6px;
+  font-size: 13px; margin-top: 6px;
 }
+.hero-stars { display: flex; align-items: center; gap: 5px; margin-top: 16px; }
+.hero-stars svg { width: 18px; height: 18px; fill: var(--gold); filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .18)); }
+.hero-stars span { margin-left: 7px; color: #fff; font-weight: 700; font-size: 13px; }
 
 h1 { display: none; }
 h2 {
@@ -45,8 +79,19 @@ h3 { margin: 8px 0; }
 .card {
   background: var(--card); border: 1px solid var(--line);
   border-radius: 16px; padding: 16px; margin: 14px 0;
-  box-shadow: 0 2px 14px rgba(36, 26, 21, .05);
+  box-shadow: 0 14px 34px -16px rgba(40, 7, 3, .45);
 }
+
+/* 登入卡 */
+.logincard { padding: 22px 20px; }
+.login-note {
+  background: #fff7e8; border: 1px dashed #f0b53a; border-radius: 12px;
+  padding: 11px 14px; margin: 0 0 16px; font-size: 14px; line-height: 1.8; color: #7a5310;
+}
+.logincard .field { margin: 14px 0; }
+.logincard .field label { display: block; font-weight: 700; font-size: 13.5px; margin-bottom: 6px; }
+.logincard .field input { width: 100%; height: 48px; border-radius: 12px; font-size: 15px; }
+.loginbtn { width: 100%; height: 50px; font-size: 16px; letter-spacing: .3em; margin-top: 8px; }
 
 /* 星等 */
 .stars { display: flex; gap: 6px; font-size: 26px; cursor: pointer; user-select: none; }
@@ -66,11 +111,12 @@ button:disabled { opacity: .5; box-shadow: none; cursor: default; }
 
 /* 輸入 */
 input, textarea, select {
-  font-size: 15px; padding: 8px 10px; border: 1px solid var(--line);
-  border-radius: 10px; background: #fff; color: var(--ink);
+  font-size: 15px; padding: 8px 10px; border: 1px solid #e0d2ba;
+  border-radius: 10px; background: #fbf7ef; color: var(--ink);
 }
+input::placeholder, textarea::placeholder { color: #b8a789; }
 input:focus, textarea:focus, select:focus {
-  outline: 2px solid rgba(234, 52, 12, .25); border-color: var(--brand);
+  outline: 2px solid rgba(234, 52, 12, .25); border-color: var(--brand); background: #fffdf6;
 }
 
 /* 訊息 */
@@ -94,7 +140,7 @@ a { color: var(--brand); font-weight: 600; }
 
 /* 每位同仁一張卡（可展開） */
 details.ratee {
-  background: #fff; border: 1px solid var(--line); border-radius: 14px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
   padding: 4px 16px; margin: 10px 0; box-shadow: 0 2px 12px rgba(36, 26, 21, .05);
   transition: box-shadow .15s, border-color .15s;
 }
@@ -124,17 +170,19 @@ details.help div { font-size: 13px; color: #7c6f68; margin: 2px 0; }
 
 /* 姓名列 + 修改密碼（右側小連結，點開浮出表單） */
 .hellobar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 6px 0 4px; }
+.hellobar .muted, .hellobar-actions { color: #ffe9c9; }
+.hellobar > .muted { color: #ffe9c9; }
 .hellobar-actions { display: flex; align-items: center; gap: 10px; }
-.hb-sep { color: var(--line); user-select: none; }
-.linkbtn { background: none; border: 0; box-shadow: none; padding: 0; color: var(--brand); font-weight: 700; font-size: inherit; cursor: pointer; white-space: nowrap; }
+.hb-sep { color: rgba(255, 233, 201, .5); user-select: none; }
+.linkbtn { background: none; border: 0; box-shadow: none; padding: 0; color: var(--gold); font-weight: 700; font-size: inherit; cursor: pointer; white-space: nowrap; }
 .linkbtn:hover { background: none; text-decoration: underline; }
 .pwbox { position: relative; }
-.pwbox > summary { cursor: pointer; color: var(--brand); font-weight: 700; white-space: nowrap; list-style: none; }
+.pwbox > summary { cursor: pointer; color: var(--gold); font-weight: 700; white-space: nowrap; list-style: none; }
 .pwbox > summary::-webkit-details-marker { display: none; }
-.pwbox .pwcard { position: absolute; right: 0; top: 100%; z-index: 5; width: 250px; margin-top: 6px; box-shadow: 0 8px 24px rgba(36, 26, 21, .16); }
+.pwbox .pwcard { position: absolute; right: 0; top: 100%; z-index: 5; width: 250px; margin-top: 6px; box-shadow: 0 8px 24px rgba(36, 26, 21, .3); }
 
 /* 自評留言 */
-.peermsg { margin: 8px 0; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: #fafafa; }
+.peermsg { margin: 8px 0; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: #faf6ee; }
 .peermsg select { margin: 4px 0 6px; }
 .peer-anon { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 13px; cursor: pointer; }
 .peer-anon input { width: auto; margin: 0; }
@@ -142,8 +190,12 @@ details.help div { font-size: 13px; color: #7c6f68; margin: 2px 0; }
 
 /* 分頁（填寫評鑑／我的成績） */
 .tabs { display: flex; gap: 8px; margin: 14px 0; }
-.tab { background: #fff; color: var(--brand); border: 1.5px solid var(--brand); box-shadow: none; }
+.tab { background: var(--card); color: var(--brand); border: 1.5px solid var(--brand); box-shadow: none; }
 .tab.active { background: var(--brand); color: #fff; box-shadow: 0 4px 12px rgba(234, 52, 12, .22); }
+
+/* 紅底上的散置文字（卡片外）改亮色，維持可讀 */
+#fillPane > p.muted, #selfPane > p.muted { color: #ffdfba; }
+#forms h2, #selfForms h2 { color: #fff; border-left-color: var(--gold); }
 
 /* 我的成績折線圖 */
 .chartwrap { overflow-x: auto; margin-top: 8px; }
@@ -152,11 +204,14 @@ circle.c-prev { fill: #b7a9a2; }
 .c-cur { stroke: var(--brand); }
 circle.c-cur { fill: var(--brand); }
 
-#adminEntry { color: var(--muted); font-weight: 600; }
+#adminEntry { color: #ffd9a8; font-weight: 600; }
 
-/* 列印（存 PDF）：只留績效評核表 */
+/* 列印（存 PDF）：只留績效評核表，火焰與動畫全部拿掉 */
 .print-only { display: none; }
 @media print {
+  body { background: #fff !important; }
+  .fireVid, .scrim { display: none !important; }
+  * { animation: none !important; }
   body > .wrap > *:not(#adminSection) { display: none !important; }
   #gate, .selectors, #progress, #detail { display: none !important; }
   .print-only { display: block !important; margin: 0 0 12px; }
@@ -165,6 +220,19 @@ circle.c-cur { fill: var(--brand); }
   #overview b { font-size: 15px; }
   #overview table { font-size: 12px; width: 100%; }
   #overview a { color: #000; text-decoration: none; }
+}
+
+/* 減少動態：關閉裝飾動畫（火焰影片由 index.html 腳本暫停） */
+@media (prefers-reduced-motion: reduce) {
+  .brand-emblem { animation: none; }
+}
+
+/* 手機 */
+@media (max-width: 480px) {
+  .brand-emblem { height: 52px; }
+  .brand-name { font-size: 19px; }
+  .app-subtitle { letter-spacing: 4px; }
+  .hero-stars span { font-size: 12px; }
 }
 
 /* 送出前確認視窗 */
@@ -176,5 +244,5 @@ circle.c-cur { fill: var(--brand); }
 .confirmbox { max-width: 420px; width: 100%; margin: 0; box-shadow: 0 12px 32px rgba(36, 26, 21, .3); }
 .confirmbox p { margin: 8px 0; line-height: 1.6; }
 .confirm-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }
-.ghostbtn { background: #fff; color: var(--ink); border: 1px solid var(--line); box-shadow: none; }
-.ghostbtn:hover { background: #f4f4f5; }
+.ghostbtn { background: var(--card); color: var(--ink); border: 1px solid var(--line); box-shadow: none; }
+.ghostbtn:hover { background: #f6efe4; }

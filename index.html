@@ -7,20 +7,34 @@
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
+  <video class="fireVid" src="assets/fire.mp4" autoplay muted loop playsinline aria-hidden="true"></video>
+  <div class="scrim" aria-hidden="true"></div>
   <div class="wrap">
     <header class="app-header">
-      <img class="brand-logo" src="assets/logo.png" alt="麻的小辛辣" />
-      <div class="app-subtitle">績效評核系統</div>
+      <div class="ribbon">麻・辣</div>
+      <div class="lockup">
+        <img class="brand-emblem" src="assets/emblem.png" alt="麻的小辛辣" />
+        <div>
+          <div class="brand-name">麻的小辛辣</div>
+          <div class="app-subtitle">績效評核系統</div>
+        </div>
+      </div>
+      <div class="hero-stars" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M12 2l2.9 6.3 6.9.7-5.1 4.6 1.4 6.8L12 17.8 5.9 20.4l1.4-6.8L2.2 9l6.9-.7z"/></svg>
+        <svg viewBox="0 0 24 24"><path d="M12 2l2.9 6.3 6.9.7-5.1 4.6 1.4 6.8L12 17.8 5.9 20.4l1.4-6.8L2.2 9l6.9-.7z"/></svg>
+        <svg viewBox="0 0 24 24"><path d="M12 2l2.9 6.3 6.9.7-5.1 4.6 1.4 6.8L12 17.8 5.9 20.4l1.4-6.8L2.2 9l6.9-.7z"/></svg>
+        <span>謝謝每一位一起顧好這鍋的你</span>
+      </div>
     </header>
 
     <!-- 同仁互評區（預設顯示） -->
     <div id="evalSection">
       <!-- 登入閘 -->
-      <div id="loginGate" class="card">
-        <p>請先登入再進行評鑑 🔑</p>
-        <label>帳號 <input id="acc" autocomplete="off" /></label><br /><br />
-        <label>密碼 <input id="pw" type="password" autocomplete="new-password" /></label>
-        <button id="loginBtn">登入</button>
+      <div id="loginGate" class="card logincard">
+        <p class="login-note">請先登入再進行評鑑 🔑　忘記密碼找店長就好。</p>
+        <div class="field"><label for="acc">帳號</label><input id="acc" autocomplete="off" placeholder="例如 007" /></div>
+        <div class="field"><label for="pw">密碼</label><input id="pw" type="password" autocomplete="new-password" placeholder="請輸入密碼" /></div>
+        <button id="loginBtn" class="loginbtn">登　入</button>
         <div id="loginErr" class="msg err" style="display:none"></div>
       </div>
       <!-- 評鑑表單（登入後顯示） -->
@@ -125,6 +139,13 @@
     </div>
   </div>
 
+  <script>
+    // 使用者系統設「減少動態」時，暫停背景火焰影片（純視覺，不影響功能）
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      var fv = document.querySelector('.fireVid');
+      if (fv) { fv.pause(); fv.removeAttribute('autoplay'); }
+    }
+  </script>
   <script type="module" src="js/eval-page.js"></script>
   <script type="module" src="js/admin-page.js"></script>
 </body>
