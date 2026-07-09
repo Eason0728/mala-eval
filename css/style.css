@@ -217,22 +217,28 @@ circle.c-cur { fill: var(--brand); }
   font-size: .9em; font-weight: 600;
 }
 
-/* 列印（存 PDF）：只留績效評核表，火焰與動畫全部拿掉 */
+/* 列印（存 PDF）：只留績效評核表，火焰與動畫全部拿掉；預設 A4 直式、盡量收一頁 */
 .print-only { display: none; }
+@page { size: A4 portrait; margin: 10mm; }
 @media print {
   body { background: #fff !important; }
   .fireVid, .scrim { display: none !important; }
   * { animation: none !important; }
   body > .wrap > *:not(#adminSection) { display: none !important; }
   #gate, .selectors, #progress, #detail, #finalizeBar { display: none !important; }
-  .print-only { display: block !important; margin: 0 0 12px; }
+  .wrap { max-width: none !important; padding: 0 !important; }
+  .print-only { display: block !important; margin: 0 0 8px; }
   .print-only h2 { color: #000; border: 0; padding: 0; }
   #overview, #gradePlacement { border: 0 !important; padding: 0 !important; box-shadow: none !important; }
-  #overview b, #gradePlacement > b { font-size: 15px; }
-  #overview table, #gradePlacement table { font-size: 12px; width: 100%; }
+  #overview b, #gradePlacement > b { font-size: 14px; }
+  /* 收緊字級與內距，讓成績表收在一頁 A4 */
+  #overview table, #gradePlacement table { font-size: 10.5px; width: 100%; margin-top: 6px; }
+  #overview th, #overview td, #gradePlacement th, #gradePlacement td { padding: 3px 4px; }
   #overview a { color: #000; text-decoration: none; }
-  #gradePlacement { margin-top: 16px; page-break-inside: avoid; }
+  #gradePlacement { margin-top: 10px; }
   #gradePlacement .grade-subtitle { color: #000; }
+  /* 表格與區塊盡量不被切成跨頁 */
+  #overview, #gradePlacement, #companyMsgs, table { page-break-inside: avoid; }
 }
 
 /* 減少動態：關閉裝飾動畫（火焰影片由 index.html 腳本暫停） */
