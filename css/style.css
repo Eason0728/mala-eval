@@ -206,6 +206,10 @@ circle.c-cur { fill: var(--brand); }
 
 #adminEntry { color: #ffd9a8; font-weight: 600; }
 
+/* 同仁考核結果（正職／計時兩區塊） */
+.grade-block { margin-top: 12px; }
+.grade-subtitle { font-weight: 600; color: var(--brand); margin: 0 0 4px; }
+
 /* 列印（存 PDF）：只留績效評核表，火焰與動畫全部拿掉 */
 .print-only { display: none; }
 @media print {
@@ -216,10 +220,12 @@ circle.c-cur { fill: var(--brand); }
   #gate, .selectors, #progress, #detail { display: none !important; }
   .print-only { display: block !important; margin: 0 0 12px; }
   .print-only h2 { color: #000; border: 0; padding: 0; }
-  #overview { border: 0 !important; padding: 0 !important; box-shadow: none !important; }
-  #overview b { font-size: 15px; }
-  #overview table { font-size: 12px; width: 100%; }
+  #overview, #gradePlacement { border: 0 !important; padding: 0 !important; box-shadow: none !important; }
+  #overview b, #gradePlacement > b { font-size: 15px; }
+  #overview table, #gradePlacement table { font-size: 12px; width: 100%; }
   #overview a { color: #000; text-decoration: none; }
+  #gradePlacement { margin-top: 16px; page-break-inside: avoid; }
+  #gradePlacement .grade-subtitle { color: #000; }
 }
 
 /* 減少動態：關閉裝飾動畫（火焰影片由 index.html 腳本暫停） */

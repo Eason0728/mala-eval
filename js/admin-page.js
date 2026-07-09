@@ -2,7 +2,7 @@ import {
   fetchAdminData, submitAdjust, submitSupervisorPerf, submitSupervisorFeedback,
   submitFtTemplate, submitFtTitle,
 } from './api.js';
-import { round1, raterTotal, averageTotals, finalScore, kpiTotal, ftAttitudeScale, capScore } from './scoring.js';
+import { round1, raterTotal, averageTotals, finalScore, kpiTotal, ftAttitudeScale, capScore, gradeFor, wageTierIndex } from './scoring.js';
 
 // 取某正職的職稱範本項目
 function ftItemsFor(ratee) {
@@ -167,6 +167,13 @@ function buildRows() {
 }
 
 function numText(n) { return n === null ? '—' : round1(n); }
+// 總分＝態度分＋表現分（滿分100，不含主管±調整；含調整的另有「實際分數」欄）。
+// 表現未計時，總分只算態度分；沒人評態度時顯示「—」。
+function totalText(r) {
+  if (r.attitude === null || r.attitude === undefined) return '—';
+  const perfShown = r.performanceCounted || r.performance !== null;
+  return round1(r.attitude + (perfShown ? (r.performance || 0) : 0));
+}
 
 function renderProgress(rows) {
   const attP = rows.filter((r) => r.attitude !== null && r.attitude !== undefined).length;
@@ -184,13 +191,48 @@ function renderCompany() {
   host.innerHTML = msgs.length ? `<b>💬 對公司的話（匿名）</b>${msgs.map((m) => `<div class="msgbubble">${esc(m)}</div>`).join('')}` : '';
 }
 
+// 同仁考核結果：分正職／計時兩區塊，顯示各人本季分數落點。
+// 正職＝考核等第（依實際分數 gradeFor）＋獎金基數；計時＝實際分數落在哪個時薪級距（wageTierIndex）。
+// 落點一律依「實際分數」（含主管±調整、上限100），與同仁「我的成績」判定一致。
+function renderGradePlacement(rows) {
+  const host = document.getElementById('gradePlacement');
+  if (!host) return;
+  const tiers = (DATA.config && DATA.config.wageTiers) || [];
+  const ft = rows.filter((r) => r.role === '正職');
+  const pt = rows.filter((r) => r.role === '計時');
+
+  const ftBody = ft.map((r) => {
+    const g = gradeFor(r.finalScore);
+    return `<tr><td>${r.ratee}</td><td>${numText(r.finalScore)}</td>
+      <td>${g ? g.grade : '—'}</td><td>${g ? esc(g.baseText) : '—'}</td></tr>`;
+  }).join('');
+  const ftTable = ft.length
+    ? `<table><tr><th>同仁</th><th>實際分數</th><th>考核等第</th><th>獎金發放基數</th></tr>${ftBody}</table>`
+    : '<div class="muted">本季無正職資料</div>';
+
+  const ptBody = pt.map((r) => {
+    const idx = wageTierIndex(tiers, r.finalScore);
+    const tier = idx >= 0 ? tiers[idx] : null;
+    return `<tr><td>${r.ratee}</td><td>${numText(r.finalScore)}</td>
+      <td>${tier ? esc(String(tier[0])) : '—'}</td><td>${tier ? esc(String(tier[1])) : '—'}</td></tr>`;
+  }).join('');
+  const ptTable = pt.length
+    ? `<table><tr><th>同仁</th><th>實際分數</th><th>時薪級距（落點）</th><th>時薪</th></tr>${ptBody}</table>`
+    : '<div class="muted">本季無計時資料</div>';
+
+  host.innerHTML = `<b>同仁考核結果 · ${quarterLabel(CURRENT_Q)}</b>
+    <div class="grade-block"><div class="grade-subtitle">正職 · 考核等第 × 獎金</div>${ftTable}</div>
+    <div class="grade-block"><div class="grade-subtitle">計時 · 時薪級距落點</div>${ptTable}</div>`;
+}
+
 function renderOverview(rows) {
-  const head = '<tr><th>同仁</th><th>角色</th><th>態度分</th><th>態度±</th><th>表現分</th><th>表現±</th><th>實際分數</th><th>態度份數</th><th>表現份數</th></tr>';
+  const head = '<tr><th>同仁</th><th>角色</th><th>態度分（30分）</th><th>態度±</th><th>表現分（70分）</th><th>表現±</th><th>總分（100分）</th><th>實際分數</th><th>態度份數</th><th>表現份數</th></tr>';
   const body = rows.map((r) => `<tr>
     <td><a href="#" data-r="${r.ratee}">${r.ratee}</a></td>
     <td>${r.role}</td>
     <td>${numText(r.attitude)}</td><td>${r.attitudeAdjust}</td>
     <td>${r.performanceCounted || r.performance !== null ? numText(r.performance) : '未計'}</td><td>${r.performanceAdjust}</td>
+    <td>${totalText(r)}</td>
     <td>${numText(r.finalScore)}</td><td>${r.attManual ? '手動' : r.attitudeCount}</td><td>${r.perfManual ? '手動' : r.performanceCount}</td>
   </tr>`).join('');
   const host = document.getElementById('overview');
@@ -364,6 +406,7 @@ async function reload() {
   const rows = buildRows();
   renderProgress(rows);
   renderOverview(rows);
+  renderGradePlacement(rows);
   renderCompany();
 }
 
@@ -391,6 +434,7 @@ document.getElementById('enter').onclick = async () => {
     const rows = buildRows();
     renderProgress(rows);
     renderOverview(rows);
+    renderGradePlacement(rows);
     renderCompany();
   } catch {
     document.getElementById('gateErr').style.display = 'block';
