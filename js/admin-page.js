@@ -360,6 +360,46 @@ function renderOverview(rows) {
   });
 }
 
+// 某人某類別（態度/表現）的每題細項：他評平均（不含自己）、自評、總分（含自評的最終分）。
+// 正職態度每項 ×1.2；計時原始。資料來自即時評分紀錄，無評分回 null。
+function itemBreakdown(ratee, role, category) {
+  const banks = (DATA.config && DATA.config.banks) || {};
+  const isAtt = category === '態度';
+  const bank = isAtt ? (role === '正職' ? banks.ftAttitude : banks.ptAttitude) : banks.ptPerf;
+  if (!bank || !bank.length) return null;
+  const peers = (DATA.peerRecords || []).filter((r) => r.ratee === ratee && r.category === category).map((r) => r.scores);
+  const selfRec = (DATA.selfRecords || []).find((r) => r.ratee === ratee && r.category === category);
+  const selfArr = selfRec ? selfRec.scores : null;
+  if (!peers.length && !selfArr) return null;
+  const peerAvg = peers.length ? averageItems(peers) : null;
+  const finalArr = averageItems(selfArr ? peers.concat([selfArr]) : peers);
+  const scale = (role === '正職' && isAtt) ? ftAttitudeScale : (v) => v;
+  return { bank, peerAvg, selfArr, finalArr, scale };
+}
+function itemDetailTable(title, bd) {
+  if (!bd) return '';
+  const { bank, peerAvg, selfArr, finalArr, scale } = bd;
+  let total = 0;
+  const body = bank.map((it, i) => {
+    total += scale(finalArr[i]);
+    const pv = peerAvg ? numText(scale(peerAvg[i])) : '—';
+    const sv = selfArr ? numText(scale(selfArr[i])) : '—';
+    return `<tr><td style="text-align:left">${esc(it.label)}</td><td>${pv}</td><td>${sv}</td><td>${numText(scale(finalArr[i]))}</td></tr>`;
+  }).join('');
+  return `<div class="grade-block"><div class="grade-subtitle">${title}</div>
+    <table><tr><th style="text-align:left">項目</th><th>平均分數</th><th>自評分數</th><th>總分</th></tr>
+    ${body}<tr><td style="text-align:left"><b>小計</b></td><td>—</td><td>—</td><td><b>${numText(total)}</b></td></tr></table></div>`;
+}
+function itemDetailHtml(ratee, role) {
+  const attTbl = itemDetailTable('職能態度' + (role === '正職' ? '（每項 ×1.2）' : ''), itemBreakdown(ratee, role, '態度'));
+  const perfTbl = role === '計時' ? itemDetailTable('職能表現', itemBreakdown(ratee, role, '表現')) : '';
+  if (!attTbl && !perfTbl) return '';
+  const note = role === '計時'
+    ? '平均分數＝其他同仁互評平均（不含自己）；總分＝含自評的最終分，各分類小計＝上方的態度分／表現分。'
+    : '平均分數＝其他同仁互評平均（不含自己）；總分＝含自評的最終分，小計＝上方態度分。正職的職能表現為主管 KPI 評分，明細見下方 KPI 卡片。';
+  return `<div class="card"><b>細項分數</b>${attTbl}${perfTbl}<div class="muted" style="font-size:.85em;margin-top:4px">${note}</div></div>`;
+}
+
 function renderDetail(ratee) {
   const row = buildRows().find((r) => r.ratee === ratee);
   const adj = DATA.adjustments.find((a) => a.ratee === ratee) || {};
@@ -401,6 +441,7 @@ function renderDetail(ratee) {
     <b>${ratee}（${row.role}） 明細</b>
     <div>態度分 ${numText(row.attitude)}｜表現分 ${row.performance === null ? '未計' : numText(row.performance)}｜實際分數 ${numText(row.finalScore)}</div>
     ${selfLine}
+    ${itemDetailHtml(ratee, row.role)}
     ${perfBlock}
     <div class="card">
       <div>主管 ± 調整</div>
