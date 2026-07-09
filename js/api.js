@@ -32,6 +32,8 @@ export function submitFtTemplate(payload) { return postJSON(payload); }
 export function submitFtTitle(payload) { return postJSON(payload); }
 export function submitAdjust(payload) { return postJSON(payload); }
 export function submitSupervisorFeedback(payload) { return postJSON(payload); }
+export function submitSaveResults(payload) { return postJSON(payload); }
+export function submitClearResults(payload) { return postJSON(payload); }
 
 export async function fetchAdminData(passcode, quarter) {
   const url = `${APPS_SCRIPT_URL}?action=adminData`

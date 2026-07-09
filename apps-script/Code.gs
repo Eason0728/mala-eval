@@ -146,7 +146,7 @@ function publicConfig() {
   const hit = cache.get('publicConfig');
   if (hit) return JSON.parse(hit);
   const cfg = {
-    ver: 14, // 部署版本標記（14：peer/self 帳密驗證＋批次寫入＋config 5 分鐘快取）
+    ver: 15, // 部署版本標記（15：定稿本季 saveResults/clearResults 寫入結果細項）
     quarter: currentQuarter(),
     accounts: readAccounts().map((a) => ({ name: a.name, role: a.role })),
     banks: {
@@ -490,6 +490,43 @@ function readAdminData(passcode, quarter) {
   };
 }
 
+// 「結果細項」欄位：季度｜受評者｜角色｜類別｜題key｜題目｜分數（7 欄）。
+var RESULT_HEADER = ['季度', '受評者', '角色', '類別', '題key', '題目', '分數'];
+function normalizeResultRow(r) {
+  const out = (r || []).slice(0, 7);
+  while (out.length < 7) out.push('');
+  return out;
+}
+// 定稿某季：把前端算好的每項最終分數寫進「結果細項」，之後讀該季一律用這些固定值（不再即時算、不受改範本影響）。
+// 冪等：先移除該季既有列，再整批寫入。rows：[[受評者,角色,類別,題key,題目,分數], ...]。
+function handleSaveResults(p) {
+  if (!checkPass(p.passcode)) return { ok: false, reason: 'unauthorized' };
+  const quarter = p.quarter;
+  if (!quarter) return { ok: false, reason: 'no-quarter' };
+  let sh = ss().getSheetByName('結果細項');
+  if (!sh) { sh = ss().insertSheet('結果細項'); sh.getRange(1, 1, 1, 7).setValues([RESULT_HEADER]); }
+  const v = sh.getDataRange().getValues();
+  const keep = [RESULT_HEADER];
+  for (let i = 1; i < v.length; i++) if (v[i][0] !== quarter) keep.push(normalizeResultRow(v[i])); // 保留其他季
+  (p.rows || []).forEach((r) => keep.push(normalizeResultRow([quarter, r[0], r[1], r[2], r[3], r[4], r[5]])));
+  sh.clearContents();
+  sh.getRange(1, 1, keep.length, 7).setValues(keep);
+  return { ok: true, wrote: (p.rows || []).length };
+}
+// 解除某季定稿：移除該季在「結果細項」的所有列，該季回到即時計算。
+function handleClearResults(p) {
+  if (!checkPass(p.passcode)) return { ok: false, reason: 'unauthorized' };
+  const sh = ss().getSheetByName('結果細項');
+  if (!sh) return { ok: true, removed: 0 };
+  const v = sh.getDataRange().getValues();
+  const keep = [RESULT_HEADER];
+  let removed = 0;
+  for (let i = 1; i < v.length; i++) { if (v[i][0] !== p.quarter) keep.push(normalizeResultRow(v[i])); else removed++; }
+  sh.clearContents();
+  sh.getRange(1, 1, keep.length, 7).setValues(keep);
+  return { ok: true, removed };
+}
+
 function doGet(e) {
   const action = e.parameter.action;
   if (action === 'config') return jsonOut(publicConfig());
@@ -512,6 +549,8 @@ function doPost(e) {
     if (p.type === 'ftTitle') return jsonOut(handleFtTitle(p));
     if (p.type === 'adjust') return jsonOut(handleAdjust(p));
     if (p.type === 'supervisorFeedback') return jsonOut(handleSupervisorFeedback(p));
+    if (p.type === 'saveResults') return jsonOut(handleSaveResults(p));
+    if (p.type === 'clearResults') return jsonOut(handleClearResults(p));
     return jsonOut({ ok: false, reason: 'unknown type' });
   } finally {
     lock.releaseLock();

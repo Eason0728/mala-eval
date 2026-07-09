@@ -210,6 +210,13 @@ circle.c-cur { fill: var(--brand); }
 .grade-block { margin-top: 12px; }
 .grade-subtitle { font-weight: 600; color: var(--brand); margin: 0 0 4px; }
 
+/* 定稿漂移提醒（定稿後又改了分數／範本、尚未重新定稿） */
+.finalize-drift {
+  margin: 8px 0 2px; padding: 8px 12px; border-radius: 8px;
+  background: #fff3cd; color: #7a5b00; border: 1px solid #ffe08a;
+  font-size: .9em; font-weight: 600;
+}
+
 /* 列印（存 PDF）：只留績效評核表，火焰與動畫全部拿掉 */
 .print-only { display: none; }
 @media print {
@@ -217,7 +224,7 @@ circle.c-cur { fill: var(--brand); }
   .fireVid, .scrim { display: none !important; }
   * { animation: none !important; }
   body > .wrap > *:not(#adminSection) { display: none !important; }
-  #gate, .selectors, #progress, #detail { display: none !important; }
+  #gate, .selectors, #progress, #detail, #finalizeBar { display: none !important; }
   .print-only { display: block !important; margin: 0 0 12px; }
   .print-only h2 { color: #000; border: 0; padding: 0; }
   #overview, #gradePlacement { border: 0 !important; padding: 0 !important; box-shadow: none !important; }

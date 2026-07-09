@@ -1,8 +1,8 @@
 import {
   fetchAdminData, submitAdjust, submitSupervisorPerf, submitSupervisorFeedback,
-  submitFtTemplate, submitFtTitle,
+  submitFtTemplate, submitFtTitle, submitSaveResults, submitClearResults,
 } from './api.js';
-import { round1, raterTotal, averageTotals, finalScore, kpiTotal, ftAttitudeScale, capScore, gradeFor, wageTierIndex } from './scoring.js';
+import { round1, raterTotal, averageTotals, averageItems, finalScore, kpiTotal, kpiItemScore, ftAttitudeScale, capScore, gradeFor, wageTierIndex } from './scoring.js';
 
 // 取某正職的職稱範本項目
 function ftItemsFor(ratee) {
@@ -189,6 +189,124 @@ function renderCompany() {
   if (!host) return;
   host.style.display = msgs.length ? '' : 'none';
   host.innerHTML = msgs.length ? `<b>💬 對公司的話（匿名）</b>${msgs.map((m) => `<div class="msgbubble">${esc(m)}</div>`).join('')}` : '';
+}
+
+// 定稿本季：把本季每位同仁的「每項最終分數」算出來（與同仁「我的成績」顯示一致），
+// 供寫入「結果細項」凍結。回 { rows:[[受評者,角色,類別,題key,題目,分數]], ftIncomplete:[尚未評完 KPI 的正職] }。
+// 正職 KPI 只有整組評完才寫（與 buildMyQuarters 一致：未評完＝未計，不定稿）。
+function buildQuarterResults() {
+  const { config, peerRecords, supervisorPerf, selfRecords } = DATA;
+  const banks = config.banks || {};
+  const grp = {}; // 受評者|類別 → [各評核者(含自評)的每題分數陣列]
+  const add = (r) => { const k = r.ratee + '|' + r.category; (grp[k] = grp[k] || []).push(r.scores); };
+  (peerRecords || []).forEach(add);
+  (selfRecords || []).forEach(add);
+  const spBy = new Map((supervisorPerf || []).map((s) => [s.ratee, s]));
+  const rows = [];
+  const ftIncomplete = [];
+  config.accounts.forEach((a) => {
+    const role = a.role;
+    // 態度：每題平均，正職每題 ×1.2、計時原始
+    const attBank = role === '正職' ? (banks.ftAttitude || []) : (banks.ptAttitude || []);
+    const attList = grp[a.name + '|態度'];
+    if (attList && attList.length && attBank.length) {
+      const per = averageItems(attList);
+      attBank.forEach((it, i) => {
+        const s = role === '正職' ? ftAttitudeScale(per[i]) : per[i];
+        rows.push([a.name, role, '態度', it.key, it.label, round1(s)]);
+      });
+    }
+    // 表現
+    if (role === '計時') {
+      const perfBank = banks.ptPerf || [];
+      const perfList = grp[a.name + '|表現'];
+      if (perfList && perfList.length && perfBank.length) {
+        const per = averageItems(perfList);
+        perfBank.forEach((it, i) => rows.push([a.name, role, '表現', it.key, it.label, round1(per[i])]));
+      }
+    } else {
+      const { items } = ftItemsFor(a.name);
+      const sp = spBy.get(a.name);
+      if (items.length) {
+        const scored = sp ? items.map((it) => ({ it, score: kpiItemScore(it, (sp.sel || {})[it.key]) })) : null;
+        if (scored && scored.every((p) => p.score !== null)) {
+          scored.forEach((p) => rows.push([a.name, role, '表現', p.it.key, p.it.label || ('第' + p.it.no + '項'), round1(p.score)]));
+        } else {
+          ftIncomplete.push(a.name); // 有範本但未評完 → 這次不鎖表現
+        }
+      }
+      // 無範本（如帳號000本人）→ 表現本就未計，不列入待評
+    }
+  });
+  return { rows, ftIncomplete };
+}
+
+// 偵測「已定稿的季」是否有漂移：目前即時算出的分數 ≠ 已鎖定的定稿值（代表定稿後又改了評分／範本）。
+// 用 受評者|類別|題目 對照每項分數。無即時資料的歷史季（如手動匯入）不算漂移（回 false）。
+function quarterHasDrift() {
+  const frozen = DATA.results || [];
+  if (!frozen.length) return false; // 未定稿
+  const { rows } = buildQuarterResults();
+  if (!rows.length) return false; // 該季沒有即時評分資料（歷史匯入季）→ 不提醒
+  const fmap = new Map();
+  frozen.forEach((r) => fmap.set(r.ratee + '|' + r.category + '|' + r.label, round1(r.score)));
+  const lmap = new Map();
+  rows.forEach((r) => lmap.set(r[0] + '|' + r[2] + '|' + r[4], round1(r[5])));
+  if (fmap.size !== lmap.size) return true;
+  for (const [k, v] of lmap) if (!fmap.has(k) || fmap.get(k) !== v) return true;
+  return false;
+}
+
+// 定稿狀態列：顯示本季是否已定稿（結果細項有無資料），並提供定稿／解除定稿按鈕。
+function renderFinalizeBar() {
+  const host = document.getElementById('finalizeBar');
+  if (!host) return;
+  const finalized = (DATA.results || []).length > 0;
+  const drift = finalized && quarterHasDrift();
+  const status = finalized
+    ? '<span style="color:#1a7f37;font-weight:600">✅ 本季已定稿（分數已鎖定，修改範本不影響本季）</span>'
+    : '<span class="muted">本季尚未定稿（分數仍會隨評分／範本即時變動）</span>';
+  const driftWarn = drift
+    ? '<div class="finalize-drift">⚠️ 偵測到定稿後有新的評分或範本異動，尚未反映到目前顯示的分數。改完請按「重新定稿」更新。</div>'
+    : '';
+  host.innerHTML = `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <b>📌 ${quarterLabel(CURRENT_Q)} 成績</b>${status}
+    <button id="btnFinalize">${finalized ? '重新定稿' : '定稿本季'}</button>
+    ${finalized ? '<button id="btnUnfinalize" class="tab">解除定稿</button>' : ''}
+    <span id="finalizeMsg" class="muted"></span></div>
+    ${driftWarn}
+    <div class="muted" style="margin-top:4px;font-size:.85em">定稿＝把本季每人分數存成最終值。之後修改職稱範本只影響未定稿的季度，本季不動。</div>`;
+
+  document.getElementById('btnFinalize').onclick = async () => {
+    const { rows, ftIncomplete } = buildQuarterResults();
+    const people = new Set(rows.map((r) => r[0])).size;
+    if (!rows.length) { document.getElementById('finalizeMsg').textContent = '本季沒有可定稿的成績'; return; }
+    const warn = ftIncomplete.length
+      ? `\n\n⚠️ ${ftIncomplete.length} 位正職 KPI 尚未評完（${ftIncomplete.join('、')}），這次不會鎖住他們的表現分；評完後再定稿一次即可。`
+      : '';
+    if (!window.confirm(`要定稿「${quarterLabel(CURRENT_Q)}」嗎？\n\n會把目前 ${people} 位同仁的分數存成最終值，之後修改職稱範本不會再影響這一季。${warn}`)) return;
+    const btn = document.getElementById('btnFinalize');
+    const msg = document.getElementById('finalizeMsg');
+    btn.disabled = true; msg.textContent = '定稿中…';
+    try {
+      const res = await submitSaveResults({ type: 'saveResults', passcode: PASS, quarter: CURRENT_Q, rows });
+      if (!res.ok) throw new Error();
+    } catch { msg.textContent = '定稿失敗，請重試'; btn.disabled = false; return; }
+    try { await reload(); document.getElementById('finalizeMsg').textContent = '✅ 已定稿'; } catch { msg.textContent = '✅ 已定稿（請重新整理）'; }
+  };
+
+  if (document.getElementById('btnUnfinalize')) {
+    document.getElementById('btnUnfinalize').onclick = async () => {
+      if (!window.confirm(`要解除「${quarterLabel(CURRENT_Q)}」的定稿嗎？\n\n解除後本季分數會回到即時計算（會再次隨評分／範本變動）。`)) return;
+      const msg = document.getElementById('finalizeMsg');
+      msg.textContent = '解除中…';
+      try {
+        const res = await submitClearResults({ type: 'clearResults', passcode: PASS, quarter: CURRENT_Q });
+        if (!res.ok) throw new Error();
+      } catch { msg.textContent = '解除失敗，請重試'; return; }
+      try { await reload(); document.getElementById('finalizeMsg').textContent = '✅ 已解除定稿'; } catch { msg.textContent = '✅ 已解除（請重新整理）'; }
+    };
+  }
 }
 
 // 同仁考核結果：分正職／計時兩區塊，顯示各人本季分數落點。
@@ -405,6 +523,7 @@ async function reload() {
   DATA = await fetchAdminData(PASS, CURRENT_Q);
   const rows = buildRows();
   renderProgress(rows);
+  renderFinalizeBar();
   renderOverview(rows);
   renderGradePlacement(rows);
   renderCompany();
@@ -433,6 +552,7 @@ document.getElementById('enter').onclick = async () => {
     document.getElementById('panel').style.display = 'block';
     const rows = buildRows();
     renderProgress(rows);
+    renderFinalizeBar();
     renderOverview(rows);
     renderGradePlacement(rows);
     renderCompany();
