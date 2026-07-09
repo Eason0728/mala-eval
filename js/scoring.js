@@ -27,6 +27,12 @@ export function round1(n) {
   return Math.round(n * 10) / 10;
 }
 
+// 實際分數上限 100，不可超過；null/未計原樣回傳。
+export const SCORE_CAP = 100;
+export function capScore(v) {
+  return (v === null || v === undefined) ? v : Math.min(round1(v), SCORE_CAP);
+}
+
 // 實際分數：態度 null → null；表現 null → 只計態度；皆有 → 相加。皆含 ± 調整。
 export function finalScore({ attitude, attitudeAdjust = 0, performance = null, performanceAdjust = 0 }) {
   if (attitude === null || attitude === undefined) {

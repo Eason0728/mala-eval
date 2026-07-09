@@ -1,6 +1,6 @@
 import { login, fetchConfig, submitPeer, submitSelf, myScores, changePassword } from './api.js';
 import { splitPeerSubmission } from './validate.js';
-import { averageItems, round1, kpiItemScore, ftAttitudeScale, gradeFor, GRADE_TABLE, wageTierIndex } from './scoring.js';
+import { averageItems, round1, kpiItemScore, ftAttitudeScale, gradeFor, GRADE_TABLE, wageTierIndex, capScore } from './scoring.js';
 
 const state = { me: null, auth: null, config: null, ratings: new Map(), fillQuarter: null, self: null, selfQuarter: null };
 
@@ -362,10 +362,13 @@ function buildMyQuarters(data) {
 
 function sumItems(items) { return items ? items.reduce((a, b) => a + b.score, 0) : null; }
 function numText(n) { return n === null || n === undefined ? '—' : round1(n); }
-function diffText(cur, prev) {
+// dark=true 時為深色底列（白字），下跌不上紅（會看不到）；淺色底列下跌顯示紅字。
+function diffText(cur, prev, dark) {
   if (prev === null || prev === undefined || cur === null || cur === undefined) return '—';
   const d = round1(cur - prev);
-  return d > 0 ? `▲+${d}` : d < 0 ? `▼${d}` : '＝';
+  if (d > 0) return `▲+${d}`;
+  if (d < 0) return dark ? `▼${d}` : `<span style="color:#d21f0f;font-weight:700">▼${d}</span>`;
+  return '＝';
 }
 
 // 兩條線折線圖（name1 灰、name2 紅）
@@ -375,10 +378,19 @@ function lineChart(labels, s1, s2, name1, name2, yMax) {
   const padL = 34; const padR = 12; const padT = 30; const padB = 64;
   const x = (i) => padL + (labels.length <= 1 ? 0 : i * (W - padL - padR) / (labels.length - 1));
   const y = (v) => padT + (yMax - v) * (H - padT - padB) / yMax;
-  const poly = (arr, cls) => arr && arr.length
-    ? `<polyline class="${cls}" fill="none" stroke-width="2" points="${arr.map((v, i) => `${x(i)},${y(v)}`).join(' ')}" />`
-      + arr.map((v, i) => `<circle class="${cls}" cx="${x(i)}" cy="${y(v)}" r="3" />`).join('')
-    : '';
+  // 有值才畫，遇 null 斷線（正職上季只有態度、KPI 為空 → 態度那段仍畫得出來）
+  const poly = (arr, cls) => {
+    if (!arr || !arr.length) return '';
+    let segs = ''; let run = [];
+    const flush = () => {
+      if (run.length >= 2) segs += `<polyline class="${cls}" fill="none" stroke-width="2" points="${run.map((p) => `${x(p.i)},${y(p.v)}`).join(' ')}" />`;
+      run = [];
+    };
+    arr.forEach((v, i) => { if (v === null || v === undefined) flush(); else run.push({ i, v }); });
+    flush();
+    const dots = arr.map((v, i) => ((v === null || v === undefined) ? '' : `<circle class="${cls}" cx="${x(i)}" cy="${y(v)}" r="3" />`)).join('');
+    return segs + dots;
+  };
   const ticks = []; for (let v = 0; v <= yMax; v++) ticks.push(v);
   const grid = ticks.map((v) =>
     `<line x1="${padL}" y1="${y(v)}" x2="${W - padR}" y2="${y(v)}" stroke="#eee" /><text x="4" y="${y(v) + 4}" font-size="11" fill="#999">${v}</text>`).join('');
@@ -396,7 +408,7 @@ function compareBlock(title, labels, series1, series2, name1, name2, cats) {
   const s1 = labels.map((lb) => { const f = series1.find((x) => x.label === lb); return f ? f.score : null; });
   const s2 = labels.map((lb) => { const f = series2.find((x) => x.label === lb); return f ? f.score : null; });
   const yMax = Math.max(5, Math.ceil(Math.max.apply(null, s1.concat(s2).filter((v) => v !== null).concat([5]))));
-  const chart = lineChart(labels, s1.every((v) => v !== null) ? s1 : null, s2, name1, name2, yMax);
+  const chart = lineChart(labels, s1, s2, name1, name2, yMax);
   let prevCat = null;
   const rows = labels.map((lb, i) => {
     let head = '';
@@ -417,7 +429,7 @@ function detailBlock(title, prevItems, curItems, name1, name2, curFinal, prevFin
   const s1 = labels.map((lb) => { const f = prevItems.find((x) => x.label === lb); return f ? f.score : null; });
   const s2 = curItems.map((x) => x.score);
   const yMax = Math.max(6, Math.ceil(Math.max.apply(null, s1.concat(s2).filter((v) => v !== null).concat([6]))));
-  const chart = lineChart(labels, s1.every((v) => v !== null) ? s1 : null, s2, name1, name2, yMax);
+  const chart = lineChart(labels, s1, s2, name1, name2, yMax);
   const cats = [];
   curItems.forEach((it) => { const c = it.cat || '其他'; if (!cats.includes(c)) cats.push(c); });
   const cfgTxt = (n) => (n ? `<span class="muted"> / ${round1(n)}</span>` : '');
@@ -448,30 +460,74 @@ function detailBlock(title, prevItems, curItems, name1, name2, curFinal, prevFin
       + `<td style="${SUB}">${diffText(subCur, subPrevHas ? subPrev : null)}</td></tr>`;
     gCur += subCur; if (subPrevHas) { gPrev += subPrev; gPrevHas = true; } gMax += cfg;
   });
-  // 等第僅正職顯示（計時看時薪對照表）；依實際分數（含主管加減分）判定，未提供時退回細項總分
-  const gc = gradeFor(curFinal !== undefined && curFinal !== null ? curFinal : gCur);
-  const gp = gradeFor(prevFinal !== undefined && prevFinal !== null ? prevFinal : (gPrevHas ? gPrev : null));
+  // 等第／時薪一律依實際分數（態度＋表現＋主管加減分，上限100）判定；等第徽章僅正職顯示
+  const curFinalV = (curFinal !== undefined && curFinal !== null) ? curFinal : gCur;
+  const prevFinalV = (prevFinal !== undefined && prevFinal !== null) ? prevFinal : (gPrevHas ? gPrev : null);
+  const curFinalCap = capScore(curFinalV);
+  const prevFinalCap = capScore(prevFinalV);
+  const gc = gradeFor(curFinalCap);
+  const gp = gradeFor(prevFinalCap);
   const gTxt = (g) => (showGrade && g ? `<span style="display:inline-block;margin-left:6px;padding:1px 7px;border-radius:10px;background:#fff;color:var(--brand-dark);font-weight:800">${g.grade} 等</span>` : '');
-  body += `<tr><td style="text-align:left;${GRAND}">總分（態度＋表現）</td>`
-    + `<td style="${GRAND}"><b>${round1(gCur)}</b>${gMax ? `<span style="opacity:.75"> / ${round1(gMax)}</span>` : ''}${gTxt(gc)}</td>`
-    + `<td style="${GRAND}">${gPrevHas ? round1(gPrev) : '—'}${gTxt(gp)}</td>`
-    + `<td style="${GRAND}">${diffText(gCur, gPrevHas ? gPrev : null)}</td></tr>`;
+  const capMark = (raw) => (raw !== null && raw > 100 ? '<span style="font-size:.78em;opacity:.85"> （上限100）</span>' : '');
+  // 主管加減分 = 實際分數 − (態度＋表現)（用未封頂值算，如實反映主管給的分）
+  const curAdj = round1(curFinalV - gCur);
+  const prevAdj = (prevFinalV !== null && gPrevHas) ? round1(prevFinalV - gPrev) : null;
+  const hasAdj = Math.abs(curAdj) > 0.05 || (prevAdj !== null && Math.abs(prevAdj) > 0.05);
+  const adjTxt = (a) => ((a === null || Math.abs(a) < 0.05) ? '—' : (a > 0 ? `+${a}` : `${a}`));
+  if (hasAdj) {
+    // 有主管加減分：態度＋表現（中間小計）→ 主管加減分 → 實際分數（等第依據，上限100）
+    body += `<tr><td style="text-align:left;${SUB}">態度＋表現</td>`
+      + `<td style="${SUB}">${round1(gCur)}${gMax ? ` / ${round1(gMax)}` : ''}</td>`
+      + `<td style="${SUB}">${gPrevHas ? round1(gPrev) : '—'}</td>`
+      + `<td style="${SUB}">${diffText(gCur, gPrevHas ? gPrev : null)}</td></tr>`;
+    body += `<tr><td style="text-align:left;${SUB}">主管加減分</td>`
+      + `<td style="${SUB}">${adjTxt(curAdj)}</td><td style="${SUB}">${adjTxt(prevAdj)}</td><td style="${SUB}">—</td></tr>`;
+    body += `<tr><td style="text-align:left;${GRAND}">實際分數（含加減分）</td>`
+      + `<td style="${GRAND}"><b>${round1(curFinalCap)}</b> / 100${capMark(curFinalV)}${gTxt(gc)}</td>`
+      + `<td style="${GRAND}">${prevFinalCap !== null ? round1(prevFinalCap) : '—'}${gTxt(gp)}</td>`
+      + `<td style="${GRAND}">${diffText(curFinalCap, prevFinalCap, true)}</td></tr>`;
+  } else {
+    // 無主管加減分：態度＋表現＝最終分（上限100），等第直接標這列
+    body += `<tr><td style="text-align:left;${GRAND}">總分（態度＋表現）</td>`
+      + `<td style="${GRAND}"><b>${round1(curFinalCap)}</b>${gMax ? `<span style="opacity:.75"> / ${round1(gMax)}</span>` : ''}${capMark(curFinalV)}${gTxt(gc)}</td>`
+      + `<td style="${GRAND}">${gPrevHas ? round1(capScore(gPrev)) : '—'}${gTxt(gp)}</td>`
+      + `<td style="${GRAND}">${diffText(curFinalCap, gPrevHas ? capScore(gPrev) : null, true)}</td></tr>`;
+  }
   return `<div class="card"><b>${title}</b>${chart}
     <table><tr><th>項目</th><th>${name2}</th><th>${name1}</th><th>差</th></tr>${body}</table>
-    <div class="muted" style="font-size:.8em;margin-top:6px">總分為態度＋表現、未含主管加減分；含加減分後的最終分（＝等第依據）請看上方「各季小計」。</div></div>`;
+    <div class="muted" style="font-size:.8em;margin-top:6px">${showGrade ? '考核等第' : '時薪落點'}依實際分數（態度＋表現＋主管加減分，上限100）判定，與上方「各季小計」一致。</div></div>`;
 }
 
-// 考核等第 × 獎金發放基數對照表；highlight 本季所屬等第。
+// 考核等第 × 獎金發放基數對照表；highlight 該季所屬等第。
 function gradeTableBlock(curScore) {
   const cur = gradeFor(curScore);
   const rows = GRADE_TABLE.map((g) => {
     const on = cur && g.grade === cur.grade;
     const st = on ? 'background:#fff1c9;font-weight:700' : '';
-    return `<tr style="${st}"><td>${g.grade} 等${on ? ' ◀ 本季' : ''}</td><td>${g.range}</td><td>${g.baseText}</td></tr>`;
+    return `<tr style="${st}"><td>${g.grade} 等${on ? ' ◀' : ''}</td><td>${g.range}</td><td>${g.baseText}</td></tr>`;
   }).join('');
   return `<div class="card"><b>🏅 考核等第 × 獎金發放基數</b>
     <table><tr><th>考核等第</th><th>分數區間</th><th>實領發放基數</th></tr>${rows}</table>
-    <div class="muted" style="font-size:.8em;margin-top:6px">備註：因考核等第未分配之獎金，將直接回流至公司當季盈餘，不另行累積或留用。</div></div>`;
+    <div class="muted" style="font-size:.8em;margin-top:6px">備註：因考核等第導致未分配的剩餘獎金，將會保留至門市的聚餐獎金中，不另行累積或使用。</div></div>`;
+}
+
+// 分數落點 → 時薪對照（計時）。級距來自試算表「時薪級距」（config.wageTiers）；未回傳時用內建預設。
+function wageBlock(myScore) {
+  const DEFAULT_TIERS = [
+    ['96 分以上', '340 元'], ['91～95 分', '300 元'], ['86～90 分', '280 元'],
+    ['81～85 分', '230 元'], ['76～80 分', '220 元'], ['71～75 分', '210 元'],
+    ['66～70 分', '205 元'], ['65 分以下', '法定時薪'],
+  ];
+  const tiers = (state.config && Array.isArray(state.config.wageTiers) && state.config.wageTiers.length)
+    ? state.config.wageTiers : DEFAULT_TIERS;
+  const hi = wageTierIndex(tiers, myScore);
+  const rows = tiers.map(([r, w], i) => {
+    const on = i === hi;
+    const st = on ? ' style="background:#fff1c9;font-weight:700"' : '';
+    const mark = on && myScore !== null && myScore !== undefined ? ` ◀ 落點 ${round1(myScore)} 分` : '';
+    return `<tr${st}><td>${escapeHtml(r)}${mark}</td><td>${escapeHtml(w)}</td></tr>`;
+  }).join('');
+  return `<div class="card"><b>💰 分數落點時薪對照</b><table><tr><th>實際分數</th><th>時薪</th></tr>${rows}</table></div>`;
 }
 
 async function renderScores() {
@@ -555,54 +611,49 @@ async function renderScores() {
     const adjText = hasAdj ? (adjVal > 0 ? `+${round1(adjVal)}` : `${round1(adjVal)}`) : '—';
     const total = qTotal(q);
     const prevTotal = i > 0 ? qTotal(quarters[i - 1]) : null;
-    return `<tr><td>${qLabel(q)}</td><td>${numText(att)}</td><td>${perf === null ? '未計' : numText(perf)}</td><td>${adjText}</td><td><b>${numText(total)}</b></td><td>${diffText(total, prevTotal)}</td></tr>`;
+    const totalCap = capScore(total); // 實際分數上限 100
+    const capNote = (total !== null && total > 100) ? '<span class="muted" style="font-size:.75em">（上限100）</span>' : '';
+    return `<tr><td>${qLabel(q)}</td><td>${numText(att)}</td><td>${perf === null ? '未計' : numText(perf)}</td><td>${adjText}</td><td><b>${numText(totalCap)}</b>${capNote}</td><td>${diffText(totalCap, capScore(prevTotal))}</td></tr>`;
   }).join('');
   const table = `<div class="card"><b>各季小計</b>（實際分數已含自評與主管調整）<table><tr><th>季度</th><th>職能態度總分</th><th>職能表現總分</th><th>主管調整</th><th>實際分數</th><th>與上季</th></tr>${rows}</table></div>`;
 
-  const curQ = quarters[quarters.length - 1];
-  const prevQ = quarters.length >= 2 ? quarters[quarters.length - 2] : null;
+  const curQ = quarters[quarters.length - 1]; // 預設顯示最新一季（可由下拉切換）
   const catList = (q, kind) => [...(byQuarter[q][kind] || [])];
   const official = (q) => [...catList(q, 'att'), ...catList(q, 'perf')];
 
-  // 最新一季 vs 前一季（官方值），直接標季度名稱避免「當季」誤解
-  const trendTitle = prevQ ? `細項分數：${qLabel(curQ)} vs ${qLabel(prevQ)}` : `細項分數：${qLabel(curQ)}`;
-  const trend = detailBlock(trendTitle, prevQ ? official(prevQ) : [], official(curQ),
-    prevQ ? qLabel(prevQ) : '前一季（無資料）', qLabel(curQ),
-    qTotal(curQ), prevQ ? qTotal(prevQ) : null, data.role === '正職');
+  // ===== 查詢：季度下拉，選哪一季就看那一季的完整細項（細項＋自評他評＋時薪/等第）=====
+  const detailFor = (selQ) => {
+    const i = quarters.indexOf(selQ);
+    const pQ = i > 0 ? quarters[i - 1] : null; // 前一季（quarters 為舊→新）
+    let html = '';
+    // 自評 vs 他評（該季，有資料才顯示；手動匯入的歷史季無此拆分）
+    const selfItems = [...catList(selQ, 'attSelf'), ...catList(selQ, 'perfSelf')];
+    if (selfItems.length) {
+      const peerItems = [...catList(selQ, 'attPeer'), ...catList(selQ, 'perfPeer')];
+      html += compareBlock(`自評 vs 他評（${qLabel(selQ)}）`, selfItems.map((x) => x.label), peerItems, selfItems, '他評', '自評');
+    }
+    // 細項（選定季 vs 前一季）
+    const title = pQ ? `細項分數：${qLabel(selQ)} vs ${qLabel(pQ)}` : `細項分數：${qLabel(selQ)}`;
+    html += detailBlock(title, pQ ? official(pQ) : [], official(selQ),
+      pQ ? qLabel(pQ) : '前一季（無資料）', qLabel(selQ),
+      qTotal(selQ), pQ ? qTotal(pQ) : null, data.role === '正職');
+    // 時薪落點（計時）／考核等第＋獎金（正職）；分數上限 100
+    html += (data.role === '計時') ? wageBlock(capScore(qTotal(selQ))) : gradeTableBlock(capScore(qTotal(selQ)));
+    return html;
+  };
 
-  // 自評 vs 他評（當季）
-  let selfCompare = '';
-  const selfItems = [...catList(curQ, 'attSelf'), ...catList(curQ, 'perfSelf')];
-  if (selfItems.length) {
-    const peerItems = [...catList(curQ, 'attPeer'), ...catList(curQ, 'perfPeer')];
-    selfCompare = compareBlock(`自評 vs 他評（${qLabel(curQ)}）`, selfItems.map((x) => x.label), peerItems, selfItems, '他評', '自評');
+  // 季度下拉（新→舊），預設最新一季；只有一季時不顯示下拉
+  const qsDesc = quarters.slice().sort((a, b) => qSortKey(b) - qSortKey(a));
+  let selector = '';
+  if (qsDesc.length >= 2) {
+    const opts = qsDesc.map((q, i) => `<option value="${q}"${i === 0 ? ' selected' : ''}>${qLabel(q)}</option>`).join('');
+    selector = `<div class="card"><b>🔎 查詢季度</b>　<select id="qSelect" style="font-size:15px;padding:5px 10px;border-radius:8px;border:1px solid #e3d8d2;background:#fff">${opts}</select>`
+      + `<div class="muted" style="font-size:.8em;margin-top:6px">選擇要查看的季度，下方細項${data.role === '計時' ? '、時薪落點' : '、考核等第'}會跟著切換。</div></div>`;
   }
 
-  // 分數落點 → 時薪對照（計時適用）。級距來自試算表「時薪級距」分頁（config.wageTiers）；
-  // 後端尚未回傳時用內建預設，避免空窗。
-  let wageTable = '';
-  if (data.role === '計時') {
-    const DEFAULT_TIERS = [
-      ['96 分以上', '340 元'], ['91～95 分', '300 元'], ['86～90 分', '280 元'],
-      ['81～85 分', '230 元'], ['76～80 分', '220 元'], ['71～75 分', '210 元'],
-      ['66～70 分', '205 元'], ['65 分以下', '法定時薪'],
-    ];
-    const tiers = (state.config && Array.isArray(state.config.wageTiers) && state.config.wageTiers.length)
-      ? state.config.wageTiers : DEFAULT_TIERS;
-    const myScore = qTotal(curQ);           // 當季實際分數（含主管調整）
-    const hi = wageTierIndex(tiers, myScore); // 落點列，黃底標示
-    const wageRows = tiers.map(([r, w], i) => {
-      const on = i === hi;
-      const st = on ? ' style="background:#fff1c9;font-weight:700"' : '';
-      const mark = on && myScore !== null ? ` ◀ 本季 ${round1(myScore)} 分` : '';
-      return `<tr${st}><td>${escapeHtml(r)}${mark}</td><td>${escapeHtml(w)}</td></tr>`;
-    }).join('');
-    wageTable = `<div class="card"><b>💰 分數落點時薪對照</b><table><tr><th>實際分數</th><th>時薪</th></tr>${wageRows}</table></div>`;
-  }
-
-  // 考核等第（＋獎金基數表）僅正職顯示；計時看上方時薪對照表
-  const gradeTable = data.role === '正職' ? gradeTableBlock(qTotal(curQ)) : '';
-  pane.innerHTML = pendingNote + msgBlock + table + selfCompare + trend + wageTable + gradeTable;
+  pane.innerHTML = pendingNote + msgBlock + table + selector + `<div id="qDetail">${detailFor(curQ)}</div>`;
+  const qSel = document.getElementById('qSelect');
+  if (qSel) qSel.onchange = () => { document.getElementById('qDetail').innerHTML = detailFor(qSel.value); };
 }
 
 // ===== 分頁切換 =====

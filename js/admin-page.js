@@ -2,7 +2,7 @@ import {
   fetchAdminData, submitAdjust, submitSupervisorPerf, submitSupervisorFeedback,
   submitFtTemplate, submitFtTitle,
 } from './api.js';
-import { round1, raterTotal, averageTotals, finalScore, kpiTotal, ftAttitudeScale } from './scoring.js';
+import { round1, raterTotal, averageTotals, finalScore, kpiTotal, ftAttitudeScale, capScore } from './scoring.js';
 
 // 取某正職的職稱範本項目
 function ftItemsFor(ratee) {
@@ -151,7 +151,7 @@ function buildRows() {
     return {
       ratee: a.name, role: a.role,
       attitude, attitudeAdjust, performance, performanceAdjust, performanceCounted,
-      finalScore: score,
+      finalScore: capScore(score), // 實際分數上限 100
       attitudeCount: attList.length, performanceCount: a.role === '正職' ? (spBy.has(a.name) ? 1 : 0) : perfList.length,
       attManual, perfManual,
     };

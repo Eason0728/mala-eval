@@ -2,8 +2,18 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   raterTotal, averageTotals, averageItems, round1, finalScore, aggregateRatee,
-  kpiItemScore, kpiTotal, ftAttitudeScale, gradeFor, wageTierIndex,
+  kpiItemScore, kpiTotal, ftAttitudeScale, gradeFor, wageTierIndex, capScore,
 } from '../js/scoring.js';
+
+test('capScore 實際分數上限100、不可超過', () => {
+  assert.equal(capScore(106), 100);
+  assert.equal(capScore(100), 100);
+  assert.equal(capScore(99.9), 99.9);
+  assert.equal(capScore(68.6), 68.6);
+  assert.equal(capScore(0), 0);
+  assert.equal(capScore(null), null);
+  assert.equal(capScore(undefined), undefined);
+});
 
 test('wageTierIndex 分數落點時薪級距（下限門檻、容小數）', () => {
   const tiers = [['96 分以上', '340'], ['91～95 分', '300'], ['86～90 分', '280'],
