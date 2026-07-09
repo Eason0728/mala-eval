@@ -135,16 +135,24 @@ function buildRows() {
     const attList = attMap.get(a.name);
     const perfList = perfMap.get(a.name);
     const adj = adjBy.get(a.name) || {};
-    // 態度：優先互評紀錄平均，否則用手動填的加總
-    // 正職態度每星×1.2（滿分30）；計時維持原始。手動填的歷史值已是最終分、不再套係數。
-    let attitude = averageTotals(attList);
-    if (attitude !== null && a.role === '正職') attitude = ftAttitudeScale(attitude);
-    let attManual = false;
-    if (attitude === null && seedAtt.has(a.name)) { attitude = seedAtt.get(a.name); attManual = true; }
-    // 表現：正職=主管評分；計時=全員互評平均；皆無則用手動填
-    let performance = a.role === '正職' ? (spBy.has(a.name) ? spBy.get(a.name) : null) : averageTotals(perfList);
-    let perfManual = false;
-    if ((performance === null || performance === undefined) && seedPerf.has(a.name)) { performance = seedPerf.get(a.name); perfManual = true; }
+    // 態度：手動值優先（結果細項有該人該值就直接用，它已是最終分、不再套係數），沒有才即時計算。
+    // 正職態度每星×1.2（滿分30）只套在即時計算路徑；計時維持原始。
+    let attitude; let attManual = false;
+    if (seedAtt.has(a.name)) {
+      attitude = seedAtt.get(a.name);
+      attManual = true;
+    } else {
+      attitude = averageTotals(attList);
+      if (attitude !== null && a.role === '正職') attitude = ftAttitudeScale(attitude);
+    }
+    // 表現：同樣手動值優先，沒有才即時計算（正職=主管評分；計時=全員互評平均）。
+    let performance; let perfManual = false;
+    if (seedPerf.has(a.name)) {
+      performance = seedPerf.get(a.name);
+      perfManual = true;
+    } else {
+      performance = a.role === '正職' ? (spBy.has(a.name) ? spBy.get(a.name) : null) : averageTotals(perfList);
+    }
     const attitudeAdjust = adj.attitudeAdjust || 0;
     const performanceAdjust = adj.performanceAdjust || 0;
     const { score, performanceCounted } = finalScore({ attitude, attitudeAdjust, performance, performanceAdjust });

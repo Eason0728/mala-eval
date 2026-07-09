@@ -121,10 +121,12 @@ export function kpiTotal(items, selByKey) {
 }
 
 // 組合單一受評者完整結果。計時表現=全員互評平均；正職表現=主管單一評分。
+// 正職態度套 ftAttitudeScale（×1.2，滿分30；null 不套）；finalScore 一律套 capScore 封頂 100。
 export function aggregateRatee({
   ratee, role, attitudeTotals = [], performanceTotals = [], supervisorPerf = null, adjustment = {},
 }) {
-  const attitude = averageTotals(attitudeTotals);
+  let attitude = averageTotals(attitudeTotals);
+  if (attitude !== null && role === '正職') attitude = ftAttitudeScale(attitude);
   const performance = role === '正職' ? supervisorPerf : averageTotals(performanceTotals);
   const attitudeAdjust = adjustment.attitudeAdjust ?? 0;
   const performanceAdjust = adjustment.performanceAdjust ?? 0;
@@ -136,7 +138,7 @@ export function aggregateRatee({
     attitude, attitudeAdjust,
     performance, performanceAdjust,
     performanceCounted,
-    finalScore: score,
+    finalScore: capScore(score),
     attitudeCount: attitudeTotals.length,
     performanceCount: role === '正職' ? (supervisorPerf === null ? 0 : 1) : performanceTotals.length,
   };

@@ -107,23 +107,34 @@ test('aggregateRatee 計時：表現=正職互評平均', () => {
   assert.equal(r.performanceCount, 2);
 });
 
-test('aggregateRatee 正職：表現=主管評分（單一）', () => {
+test('aggregateRatee 正職：表現=主管評分（單一），態度套 ftAttitudeScale×1.2', () => {
   const r = aggregateRatee({
     ratee: '阿華', role: '正職',
     attitudeTotals: [18, 20], supervisorPerf: 33,
   });
-  assert.equal(r.attitude, 19);
+  assert.equal(r.attitude, 22.8); // (18+20)/2=19 → ×1.2=22.8
   assert.equal(r.performance, 33);
-  assert.equal(r.finalScore, 52);
+  assert.equal(r.finalScore, 55.8);
   assert.equal(r.performanceCount, 1);
 });
 
-test('aggregateRatee 正職：主管未評 → 表現未計、只算態度', () => {
+test('aggregateRatee 正職：主管未評 → 表現未計、只算態度（仍套×1.2）', () => {
   const r = aggregateRatee({ ratee: '阿華', role: '正職', attitudeTotals: [20], supervisorPerf: null });
+  assert.equal(r.attitude, 24); // 20×1.2
   assert.equal(r.performance, null);
   assert.equal(r.performanceCounted, false);
-  assert.equal(r.finalScore, 20);
+  assert.equal(r.finalScore, 24);
   assert.equal(r.performanceCount, 0);
+});
+
+test('aggregateRatee：調整後超過100會被封頂在100', () => {
+  const r = aggregateRatee({
+    ratee: '小明', role: '正職',
+    attitudeTotals: [25], supervisorPerf: 70,
+    adjustment: { attitudeAdjust: 10, performanceAdjust: 10 },
+  });
+  // attitude = 25×1.2=30，+10調整=40；performance = 70+10=80；合計120 → 封頂100
+  assert.equal(r.finalScore, 100);
 });
 
 test('aggregateRatee：無人評態度 → 資料不足', () => {

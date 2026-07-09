@@ -782,7 +782,10 @@ document.getElementById('submit').onclick = async () => {
   const btn = document.getElementById('submit');
   btn.disabled = true;
   const quarter = state.fillQuarter;
-  const payload = { type: 'peer', quarter, rater: state.me.name, raterRole: state.me.role, note: '', ratings: complete };
+  const payload = {
+    type: 'peer', quarter, rater: state.me.name, raterRole: state.me.role, note: '', ratings: complete,
+    account: state.auth.account, password: state.auth.password,
+  };
   try {
     const res = await submitPeer(payload);
     if (res.ok) { clearPeerDraft(quarter); showResult('ok', `已完成 ${qLabel(quarter)} 的評鑑，謝謝你的回饋！`); document.getElementById('forms').style.display = 'none'; }
@@ -813,6 +816,7 @@ document.getElementById('selfSubmit').onclick = async () => {
     selfNote: document.getElementById('selfNote').value,
     companyNote: document.getElementById('companyNote').value,
     peerMessages,
+    account: state.auth.account, password: state.auth.password,
   };
   try {
     const res = await submitSelf(payload);
