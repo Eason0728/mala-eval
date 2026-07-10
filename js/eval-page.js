@@ -681,6 +681,64 @@ async function init() {
   }
 }
 
+// ===== 參觀模式（唯讀設定總覽）=====
+function visitorBankBlock(title, items) {
+  if (!items || !items.length) return '';
+  const rows = items.map((it, i) => {
+    const lv = it.levels || [];
+    const levels = [5, 4, 3, 2, 1].map((star, j) => `<div class="muted" style="font-size:.85em;margin-top:2px"><b>${star}★</b> ${escapeHtml(lv[j] || '')}</div>`).join('');
+    return `<div style="padding:8px 0;border-top:1px solid var(--line)"><b>${i + 1}. ${escapeHtml(it.label)}</b>${levels}</div>`;
+  }).join('');
+  return `<div class="grade-block"><div class="grade-subtitle">${title}（${items.length} 題）</div>${rows}</div>`;
+}
+function visitorKpiBlock(templates) {
+  const titles = Object.keys(templates || {});
+  if (!titles.length) return '<div class="muted">尚未設定 KPI 範本</div>';
+  return titles.map((t) => {
+    const body = (templates[t] || []).map((it) => {
+      const lv = it.levels || {};
+      const std = it.type === '執行力'
+        ? '完成／未完成'
+        : `A ${escapeHtml(lv.A || '')}｜B ${escapeHtml(lv.B || '')}｜C ${escapeHtml(lv.C || '')}｜D ${escapeHtml(lv.D || '')}`;
+      return `<tr><td style="text-align:left">${escapeHtml(it.label || '')}</td><td>${escapeHtml(it.type || '')}</td><td>${escapeHtml(String(it.target ?? ''))}</td><td style="text-align:left;font-size:.85em">${std}</td><td>${escapeHtml(String(it.weight ?? ''))}</td></tr>`;
+    }).join('');
+    return `<div class="grade-block"><div class="grade-subtitle">${escapeHtml(t)}</div>
+      <table><tr><th style="text-align:left">項目</th><th>類型</th><th>目標</th><th style="text-align:left">衡量標準</th><th>比重</th></tr>${body}</table></div>`;
+  }).join('');
+}
+function renderVisitor(res) {
+  const b = (state.config && state.config.banks) || {};
+  const tiers = (state.config && Array.isArray(state.config.wageTiers)) ? state.config.wageTiers : [];
+  const wageRows = tiers.map((t) => `<tr><td>${escapeHtml(t[0])}</td><td>${escapeHtml(t[1])}</td></tr>`).join('');
+  const gradeRows = GRADE_TABLE.map((g) => `<tr><td>${g.grade}</td><td>${escapeHtml(g.range)}</td><td>${escapeHtml(g.baseText)}</td></tr>`).join('');
+  document.getElementById('visitorView').innerHTML = `
+    <div class="card" style="border-left:4px solid var(--brand)">
+      <b>👀 參觀模式（唯讀）</b>
+      <div class="muted" style="margin-top:4px">這是「麻的小辛辣」績效評核系統的設定總覽，供參考使用。此模式看不到任何真實同仁的分數與留言，也無法送出或修改任何資料。</div>
+      <div style="margin-top:8px"><button id="btnVisitorLogout" class="linkbtn">↩ 登出</button></div>
+    </div>
+    <div class="card"><b>計分方式</b>
+      <ul style="margin:6px 0 0;padding-left:18px;line-height:1.7">
+        <li>總分 ＝ 職能態度 30 分 ＋ 職能表現 70 分 ＝ 100 分。</li>
+        <li>職能態度、表現皆由全體同仁互評＋本人自評取平均。</li>
+        <li>正職態度每顆星 ×1.2（滿分 30）；計時態度為原始 1–5 分。</li>
+        <li>正職表現＝主管依職稱範本評加權 KPI：技能項＝比重×等級%（A100／B80／C60／D40），執行力項＝完成拿滿比重、未完成 0。</li>
+        <li>主管可對態度／表現做 ± 調整；實際分數上限 100 分。</li>
+        <li>正職看考核等第×獎金；計時看實際分數落在哪個時薪級距。</li>
+      </ul></div>
+    <div class="card"><b>評鑑題目與星等說明</b>
+      ${visitorBankBlock('計時同仁・職能態度', b.ptAttitude)}
+      ${visitorBankBlock('計時同仁・職能表現', b.ptPerf)}
+      ${visitorBankBlock('正職・職能態度', b.ftAttitude)}
+    </div>
+    <div class="card"><b>正職職能表現 KPI 範本（依職稱）</b>${visitorKpiBlock(res.ftTemplates)}</div>
+    <div class="card"><b>時薪級距（計時）</b><table><tr><th>分數區間</th><th>時薪</th></tr>${wageRows}</table></div>
+    <div class="card"><b>考核等第 × 獎金發放基數（正職）</b><table><tr><th>等第</th><th>分數</th><th>獎金發放基數</th></tr>${gradeRows}</table></div>`;
+  document.getElementById('btnVisitorLogout').onclick = () => window.location.reload();
+  document.getElementById('loginGate').style.display = 'none';
+  document.getElementById('visitorView').style.display = 'block';
+}
+
 document.getElementById('loginBtn').onclick = async () => {
   const acc = document.getElementById('acc').value.trim();
   const pw = document.getElementById('pw').value;
@@ -689,6 +747,7 @@ document.getElementById('loginBtn').onclick = async () => {
   try {
     const res = await login(acc, pw);
     if (!res.ok) { errBox.style.display = 'block'; errBox.textContent = '帳號或密碼錯誤'; return; }
+    if (res.visitor) { renderVisitor(res); return; } // 參觀帳號：唯讀設定總覽
     state.me = { name: res.name, role: res.role };
     state.auth = { account: acc, password: pw };
     document.getElementById('loginGate').style.display = 'none';

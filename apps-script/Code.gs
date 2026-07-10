@@ -146,7 +146,7 @@ function publicConfig() {
   const hit = cache.get('publicConfig');
   if (hit) return JSON.parse(hit);
   const cfg = {
-    ver: 15, // 部署版本標記（15：定稿本季 saveResults/clearResults 寫入結果細項）
+    ver: 16, // 部署版本標記（16：參觀帳號 test/test 唯讀看設定）
     quarter: currentQuarter(),
     accounts: readAccounts().map((a) => ({ name: a.name, role: a.role })),
     banks: {
@@ -173,7 +173,14 @@ function findAccount(account, password) {
   return readAccounts().find((a) => a.account === String(account) && a.password === String(password)) || null;
 }
 
+// 參觀帳號（test/test）：唯讀，只回設定（含 KPI 範本），供非店內同仁參考。
+// 刻意不放進「帳號」分頁——才不會出現在互評名單、不會被計分、也無法送出（findAccount 找不到）。
+function isVisitor(p) { return String(p.account) === 'test' && String(p.password) === 'test'; }
+
 function handleLogin(p) {
+  if (isVisitor(p)) {
+    return { ok: true, visitor: true, name: '參觀帳號', role: '參觀', quarter: currentQuarter(), ftTemplates: readFtTemplates() };
+  }
   const acc = readAccounts().find((a) => a.account === String(p.account) && a.password === String(p.password));
   if (!acc) return { ok: false, reason: 'invalid' };
   const quarter = currentQuarter();
