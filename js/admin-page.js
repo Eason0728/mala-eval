@@ -1,6 +1,6 @@
 import {
   fetchAdminData, submitAdjust, submitSupervisorPerf, submitSupervisorFeedback,
-  submitFtTemplate, submitFtTitle, submitSaveResults, submitClearResults,
+  submitFtTemplate, submitFtTitle, submitSaveResults, submitClearResults, isDemo,
 } from './api.js';
 import { round1, raterTotal, averageTotals, averageItems, finalScore, kpiTotal, kpiItemScore, ftAttitudeScale, capScore, gradeFor, wageTierIndex } from './scoring.js';
 
@@ -562,6 +562,7 @@ function renderDetail(ratee) {
 
 async function reload() {
   DATA = await fetchAdminData(PASS, CURRENT_Q);
+  ensureDemoBanner();
   const rows = buildRows();
   renderProgress(rows);
   renderFinalizeBar();
@@ -570,12 +571,31 @@ async function reload() {
   renderCompany();
 }
 
+// 示範模式：主管端頂部橫幅（只加一次）
+function ensureDemoBanner() {
+  if (!isDemo()) return;
+  if (document.getElementById('demoBannerAdmin')) return;
+  const bn = document.createElement('div');
+  bn.id = 'demoBannerAdmin';
+  bn.className = 'card';
+  bn.style.cssText = 'border-left:4px solid var(--brand);background:#fff3cd;color:#7a5b00';
+  bn.innerHTML = '<b>🔒 示範模式（主管端）</b>　以下同仁、分數、留言全部為<b>虛構假資料</b>。任何評分、調整、定稿都<b>不會實際儲存</b>。';
+  const panel = document.getElementById('panel');
+  panel.insertBefore(bn, panel.firstChild);
+}
+
 const adminEntry = document.getElementById('adminEntry');
 if (adminEntry) {
   adminEntry.onclick = (e) => {
     e.preventDefault();
     document.getElementById('adminSection').style.display = 'block';
     adminEntry.style.display = 'none';
+    if (isDemo()) { // 示範：通行碼任意即可進入
+      document.getElementById('pass').value = '示範';
+      document.getElementById('gateErr').style.display = 'block';
+      document.getElementById('gateErr').className = 'msg';
+      document.getElementById('gateErr').textContent = '🔒 示範模式：通行碼任意，直接按「進入」即可看主管端。';
+    }
     document.getElementById('pass').focus();
     document.getElementById('adminSection').scrollIntoView({ behavior: 'smooth' });
   };
@@ -591,6 +611,7 @@ document.getElementById('enter').onclick = async () => {
     DATA = data;
     document.getElementById('gate').style.display = 'none';
     document.getElementById('panel').style.display = 'block';
+    ensureDemoBanner();
     const rows = buildRows();
     renderProgress(rows);
     renderFinalizeBar();
@@ -602,6 +623,17 @@ document.getElementById('enter').onclick = async () => {
     document.getElementById('gateErr').textContent = '連線失敗，請稍後再試';
   }
 };
+
+// 示範模式：攔截主管端所有「儲存/送出/定稿」按鈕（捕獲階段先擋掉，onclick 不會執行）。
+const DEMO_WRITE_BTNS = ['saveAdj', 'savePerf', 'saveFb', 'saveFtTitle', 'saveFtTpl', 'btnFinalize', 'btnUnfinalize'];
+document.getElementById('adminSection').addEventListener('click', (e) => {
+  if (!isDemo()) return;
+  const b = e.target.closest('button');
+  if (!b || DEMO_WRITE_BTNS.indexOf(b.id) < 0) return;
+  e.stopPropagation(); e.preventDefault();
+  const span = b.nextElementSibling && b.nextElementSibling.classList && b.nextElementSibling.classList.contains('muted') ? b.nextElementSibling : null;
+  if (span) { span.textContent = '🔒 示範模式：不會實際儲存'; } else { window.alert('🔒 示範模式：主管端的變更不會實際儲存。'); }
+}, true);
 
 const btnPrint = document.getElementById('btnPrint');
 if (btnPrint) {
