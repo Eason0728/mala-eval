@@ -607,11 +607,9 @@ const btnPrint = document.getElementById('btnPrint');
 if (btnPrint) {
   btnPrint.onclick = () => {
     document.title = `新竹光復店＿績效評核＿${String(CURRENT_Q).split('-Q')[0]}年${QZH[qNum(CURRENT_Q)]}`;
-    const logo = document.querySelector('.brand-logo');
-    const logoSrc = logo ? logo.src : 'assets/logo.png';
+    // 最上方紅色品牌 banner（.app-header）由 CSS 於列印時保留，這裡只補店名＋季度做報表識別
     document.getElementById('printHeader').innerHTML =
-      `<img src="${logoSrc}" alt="麻的小辛辣" style="height:48px;display:block;margin:0 0 10px" />`
-      + `<h2 style="border:0;padding:0;margin:0">新竹光復店　績效評核表</h2>`
+      `<h2 style="border:0;padding:0;margin:0">新竹光復店　績效評核表</h2>`
       + `<div style="margin-top:2px">${quarterLabel(CURRENT_Q)}</div>`;
     window.print();
   };

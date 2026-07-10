@@ -224,10 +224,20 @@ circle.c-cur { fill: var(--brand); }
   body { background: #fff !important; }
   .fireVid, .scrim { display: none !important; }
   * { animation: none !important; }
-  body > .wrap > *:not(#adminSection) { display: none !important; }
+  body > .wrap > *:not(#adminSection):not(.app-header) { display: none !important; }
   #gate, .selectors, #progress, #detail, #finalizeBar { display: none !important; }
   .wrap { max-width: none !important; padding: 0 !important; }
-  .print-only { display: block !important; margin: 0 0 8px; }
+  /* 保留最上方紅色品牌 banner；強制印出背景色與金色角標/星星（瀏覽器預設不印背景） */
+  .app-header {
+    display: block !important;
+    -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
+    box-shadow: none !important; border-radius: 12px;
+    padding: 14px 18px 24px; margin: 0 0 12px;
+    page-break-inside: avoid; page-break-after: avoid;
+  }
+  .brand-emblem { height: 46px !important; filter: none !important; }
+  .hero-stars { margin-top: 10px; }
+  .print-only { display: block !important; margin: 4px 0 8px; }
   .print-only h2 { color: #000; border: 0; padding: 0; }
   #overview, #gradePlacement { border: 0 !important; padding: 0 !important; box-shadow: none !important; }
   #overview b, #gradePlacement > b { font-size: 14px; }
