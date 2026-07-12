@@ -144,11 +144,21 @@
   </div>
 
   <script>
-    // 使用者系統設「減少動態」時，暫停背景火焰影片（純視覺，不影響功能）
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    // 背景火焰影片（純視覺，不影響功能）——與打卡系統同一套：
+    // 系統設「減少動態」→ 暫停；否則若 autoplay 被瀏覽器政策擋下，主動嘗試播放，
+    // 再不行就等第一次觸碰畫面（使用者手勢）補播——涵蓋 LINE 內建瀏覽器等嚴格環境。
+    (function () {
       var fv = document.querySelector('.fireVid');
-      if (fv) { fv.pause(); fv.removeAttribute('autoplay'); }
-    }
+      if (!fv) return;
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        fv.pause(); fv.removeAttribute('autoplay');
+        return;
+      }
+      var tryPlay = function () { var p = fv.play(); if (p && p.catch) p.catch(function () {}); };
+      tryPlay();
+      document.addEventListener('touchstart', tryPlay, { once: true });
+      document.addEventListener('click', tryPlay, { once: true });
+    })();
   </script>
   <script type="module" src="js/eval-page.js"></script>
   <script type="module" src="js/admin-page.js"></script>

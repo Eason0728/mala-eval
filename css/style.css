@@ -18,11 +18,12 @@ body {
 }
 .wrap { max-width: 780px; margin: 0 auto; padding: 16px 16px 48px; position: relative; z-index: 1; }
 
-/* ---- 背景真實火焰影片（黑底以 screen 混合去除）＋暖色暈影 ---- */
+/* ---- 背景真實火焰影片（黑底以 screen 混合去除）＋暖色暈影——與打卡系統同一套 ---- */
 .fireVid {
   position: fixed; inset: 0; width: 100%; height: 100%;
   object-fit: cover; object-position: center; z-index: 0; pointer-events: none;
-  mix-blend-mode: screen; filter: brightness(1.5) saturate(1.08) contrast(1.05);
+  mix-blend-mode: screen; filter: brightness(1.05) saturate(1.05) contrast(1.05);
+  opacity: 0.55;
 }
 .scrim {
   position: fixed; inset: 0; z-index: 0; pointer-events: none;
