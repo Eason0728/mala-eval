@@ -148,6 +148,78 @@ function catBlock(label, items, values, open, onSave) {
   return d;
 }
 
+// ===== 非開放期間：本季評分項目唯讀預覽（只看題目，看不到星星、不能評分） =====
+function curQuarterLabel(d = new Date()) {
+  return `${d.getFullYear()} 年 ${QLABEL[Math.floor(d.getMonth() / 3) + 1]}`;
+}
+function previewNotice() {
+  const div = document.createElement('div');
+  div.className = 'msg';
+  div.textContent = `👀 ${curQuarterLabel()}評分項目預覽：先看看這一季會用哪些項目評分，開放填寫後才能實際評分。`;
+  return div;
+}
+function previewItemEl(idx, item) {
+  const wrap = document.createElement('div');
+  wrap.className = 'item';
+  const title = document.createElement('div');
+  title.textContent = `${idx + 1}. ${item.label}`;
+  const help = document.createElement('details');
+  help.className = 'help';
+  help.innerHTML = '<summary class="muted">星等說明</summary>'
+    + item.levels.map((lv, i) => `<div>${5 - i}★ ${lv}</div>`).join('');
+  wrap.append(title, help);
+  return wrap;
+}
+function previewBank(label, items, open) {
+  const d = document.createElement('details');
+  d.className = 'cat';
+  if (open) d.open = true;
+  const sum = document.createElement('summary');
+  sum.textContent = `${label}（${items.length} 題）`;
+  d.appendChild(sum);
+  items.forEach((it, i) => d.appendChild(previewItemEl(i, it)));
+  return d;
+}
+function closedBannerHtml() {
+  return `目前非填寫期間，先開放預覽評分項目（不能評分）。開放填寫時間為每年 1、4、7、10 月的 1～5 號，下次開放：${nextOpenText()}。`;
+}
+// 正職本人的 KPI 項目預覽（主管評的表現分；資料來自 myScores 的 ftTemplate）
+function kpiPreviewCard() {
+  const card = document.createElement('div');
+  card.className = 'card';
+  const heading = '<b>職能表現 KPI（主管評分項目）</b>';
+  card.innerHTML = `${heading}<p class="muted">載入中…</p>`;
+  myScores(state.auth.account, state.auth.password).then((data) => {
+    const tpl = (data && data.ok && Array.isArray(data.ftTemplate)) ? data.ftTemplate : [];
+    if (!tpl.length) {
+      card.innerHTML = `${heading}<p class="muted">目前還沒有設定你的 KPI 項目。</p>`;
+      return;
+    }
+    const total = tpl.reduce((a, it) => a + (Number(it.weight) || 0), 0);
+    const cats = [['技能', '個人工作技能（技能）'], ['執行力', '個人執行力內容（執行力）']];
+    let html = `<b>職能表現 KPI（主管評分項目，滿分 ${total} 分）</b><p class="muted">這部分由主管依下列項目評分：</p>`;
+    cats.forEach(([key, label]) => {
+      const list = tpl.filter((it) => (it.type === '執行力') === (key === '執行力'));
+      if (!list.length) return;
+      html += `<div style="margin-top:8px"><b>${escapeHtml(label)}</b></div>`;
+      list.forEach((it) => {
+        const lv = it.levels || {};
+        const std = key === '執行力'
+          ? `<div>完成：拿 ${Number(it.weight) || 0} 分｜未完成：0 分</div>`
+          : ['A', 'B', 'C', 'D'].filter((g) => lv[g]).map((g) => `<div>${g}：${escapeHtml(lv[g])}</div>`).join('');
+        html += `<div class="item"><div>${escapeHtml(String(it.no))}. ${escapeHtml(it.label || '')}（${Number(it.weight) || 0} 分）</div>`
+          + (it.target ? `<div class="muted">🎯 目標：${escapeHtml(String(it.target))}</div>` : '')
+          + (std ? `<details class="help"><summary class="muted">衡量標準</summary>${std}</details>` : '')
+          + '</div>';
+      });
+    });
+    card.innerHTML = html;
+  }).catch(() => {
+    card.innerHTML = `${heading}<p class="muted">KPI 項目載入失敗，請重新整理再試。</p>`;
+  });
+  return card;
+}
+
 // ===== 他評（填寫評鑑）=====
 function rateeCard(r, draft) {
   const attitudeItems = bankFor(r.role, 'attitude');
@@ -202,10 +274,18 @@ function renderFill() {
   const showIds = ['fillHint', 'forms', 'submit'];
   if (!open) {
     state.fillQuarter = null;
-    banner.className = 'card msg err';
-    banner.textContent = `目前非填寫期間。開放時間為每年 1、4、7、10 月的 1～5 號，下次開放：${nextOpenText()}。`;
+    banner.className = 'card msg';
+    banner.textContent = closedBannerHtml();
     showIds.forEach((id) => { document.getElementById(id).style.display = 'none'; });
     document.getElementById('result').style.display = 'none';
+    // 唯讀預覽：本季會用來互評的題目（沒有星星、不能送出）
+    const host = document.getElementById('forms');
+    host.style.display = '';
+    host.innerHTML = '';
+    host.appendChild(previewNotice());
+    host.appendChild(previewBank('評「正職同仁」時填的題目：職能態度', bankFor('正職', 'attitude'), true));
+    host.appendChild(previewBank('評「計時同仁」時填的題目：職能態度', bankFor('計時', 'attitude'), false));
+    host.appendChild(previewBank('評「計時同仁」時填的題目：職能表現', bankFor('計時', 'perf'), false));
     return;
   }
   state.fillQuarter = t.quarter;
@@ -223,10 +303,21 @@ function renderSelf() {
   const showIds = ['selfHint', 'selfForms', 'selfMsgs', 'selfSubmit'];
   if (!open) {
     state.selfQuarter = null;
-    banner.className = 'card msg err';
-    banner.textContent = `目前非填寫期間。開放時間為每年 1、4、7、10 月的 1～5 號，下次開放：${nextOpenText()}。`;
+    banner.className = 'card msg';
+    banner.textContent = closedBannerHtml();
     showIds.forEach((id) => { document.getElementById(id).style.display = 'none'; });
     document.getElementById('selfResult').style.display = 'none';
+    // 唯讀預覽：本季自評（＝別人評你）會用的題目；正職另附本人 KPI 項目
+    const host = document.getElementById('selfForms');
+    host.style.display = '';
+    host.innerHTML = '';
+    host.appendChild(previewNotice());
+    host.appendChild(previewBank('職能態度（自評題目）', bankFor(state.me.role, 'attitude'), true));
+    if (state.me.role === '計時') {
+      host.appendChild(previewBank('職能表現（自評題目）', bankFor('計時', 'perf'), true));
+    } else {
+      host.appendChild(kpiPreviewCard());
+    }
     return;
   }
   state.selfQuarter = t.quarter;
