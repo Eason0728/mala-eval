@@ -380,6 +380,24 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
+// 慢動作按鈕：按下後顯示「進行中＋已等待幾秒」，避免同仁以為當機沒反應。
+// 打後端要 2～4 秒，原本只把按鈕變灰、文字不變，畫面看起來像沒動作。
+// 回傳「結束」函式：呼叫它恢復原文字；傳 false 表示維持不可按（例如已送出成功）。
+function btnWaiting(btn, label) {
+  const original = btn.dataset.origLabel || btn.textContent;
+  btn.dataset.origLabel = original;
+  btn.disabled = true;
+  let sec = 0;
+  const paint = () => { btn.textContent = sec ? `${label} ${sec} 秒` : label; };
+  paint();
+  const timer = setInterval(() => { sec += 1; paint(); }, 1000);
+  return (restore = true) => {
+    clearInterval(timer);
+    btn.textContent = original;
+    if (restore) btn.disabled = false;
+  };
+}
+
 function showResult(cls, text) {
   const box = document.getElementById('result');
   box.style.display = 'block';
@@ -846,9 +864,7 @@ function newbieCard(person) {
       + `總分 <b>${sc.total}</b> / 100<br><br>`
       + '送出後<b>不能修改或重填</b>，確定要送出嗎？');
     if (!yes) return;
-    btn.disabled = true;
-    const label = btn.textContent;
-    btn.textContent = '送出中…';
+    const done = btnWaiting(btn, '送出中…');
     try {
       const res = await submitNewbie({
         type: 'newbieSubmit',
@@ -857,7 +873,7 @@ function newbieCard(person) {
       });
       if (res && res.ok) {
         try { localStorage.removeItem(newbieDraftKey(person.name)); } catch (e) {}
-        renderNewbie();
+        renderNewbie();   // 整塊重繪，這顆按鈕會跟著消失，不用還原
         return;
       }
       const why = {
@@ -871,8 +887,7 @@ function newbieCard(person) {
     } catch (e) {
       say('err', '連線失敗，請稍後再試。');
     }
-    btn.disabled = false;
-    btn.textContent = label;
+    done();
   };
   card.append(btn, msg);
   return card;
@@ -958,9 +973,14 @@ async function init() {
     if (a) a.value = ''; if (p) p.value = '';
   };
   clr(); setTimeout(clr, 300);
+  const btn = document.getElementById('loginBtn');
+  const done = btnWaiting(btn, '載入中…');
   try {
     state.config = await fetchConfig();
+    done();
   } catch {
+    done(false);                      // 載入失敗就不要讓人按（按了也會出錯）
+    btn.textContent = '請重新整理';
     document.getElementById('loginErr').style.display = 'block';
     document.getElementById('loginErr').textContent = '載入失敗，請重新整理';
   }
@@ -995,8 +1015,10 @@ document.getElementById('loginBtn').onclick = async () => {
   const pw = document.getElementById('pw').value;
   const errBox = document.getElementById('loginErr');
   errBox.style.display = 'none';
+  const doneBtn = btnWaiting(document.getElementById('loginBtn'), '開啟中…');
   try {
     const res = await login(acc, pw);
+    doneBtn();
     if (!res.ok) { errBox.style.display = 'block'; errBox.textContent = '帳號或密碼錯誤'; return; }
     if (res.visitor) { enterDemo(res); return; } // 參觀帳號：示範模式（真實畫面＋假資料）
     state.me = { name: res.name, role: res.role };
@@ -1018,6 +1040,7 @@ document.getElementById('loginBtn').onclick = async () => {
       showResult('ok', `你已經送出過 ${qLabel(state.fillQuarter)} 的評鑑，謝謝！每人每季只能送出一次，無法再修改或重填。`);
     }
   } catch {
+    doneBtn();
     errBox.style.display = 'block'; errBox.textContent = '連線失敗，請稍後再試';
   }
 };
@@ -1094,7 +1117,7 @@ document.getElementById('submit').onclick = async () => {
   const go = await askConfirm(warn + '<p><b>確定要送出嗎？</b></p>');
   if (!go) return;
   const btn = document.getElementById('submit');
-  btn.disabled = true;
+  const done = btnWaiting(btn, '送出中…');
   const quarter = state.fillQuarter;
   const payload = {
     type: 'peer', quarter, rater: state.me.name, raterRole: state.me.role, note: '', ratings: complete,
@@ -1102,11 +1125,11 @@ document.getElementById('submit').onclick = async () => {
   };
   try {
     const res = await submitPeer(payload);
-    if (res.reason === 'demo') { showResult('ok', '🔒 示範模式：這裡不會實際送出，僅供參考。'); btn.disabled = false; }
-    else if (res.ok) { clearPeerDraft(quarter); showResult('ok', `已完成 ${qLabel(quarter)} 的評鑑，謝謝你的回饋！`); document.getElementById('forms').style.display = 'none'; }
-    else if (res.reason === 'duplicate') { clearPeerDraft(quarter); showResult('ok', `你已經評過 ${qLabel(quarter)} 了，謝謝！`); document.getElementById('forms').style.display = 'none'; }
+    if (res.reason === 'demo') { done(); showResult('ok', '🔒 示範模式：這裡不會實際送出，僅供參考。'); }
+    else if (res.ok) { done(false); clearPeerDraft(quarter); showResult('ok', `已完成 ${qLabel(quarter)} 的評鑑，謝謝你的回饋！`); document.getElementById('forms').style.display = 'none'; }
+    else if (res.reason === 'duplicate') { done(false); clearPeerDraft(quarter); showResult('ok', `你已經評過 ${qLabel(quarter)} 了，謝謝！`); document.getElementById('forms').style.display = 'none'; }
     else { throw new Error('rejected'); }
-  } catch { showResult('err', '送出失敗，請稍後再試一次'); btn.disabled = false; }
+  } catch { done(); showResult('err', '送出失敗，請稍後再試一次'); }
 };
 
 document.getElementById('selfSubmit').onclick = async () => {
@@ -1120,7 +1143,7 @@ document.getElementById('selfSubmit').onclick = async () => {
   }
   errBox.style.display = 'none';
   const btn = document.getElementById('selfSubmit');
-  btn.disabled = true;
+  const done = btnWaiting(btn, '送出中…');
   const quarter = state.selfQuarter;
   const peerMessages = [...document.querySelectorAll('#peerMsgs .peermsg')]
     .map((r) => ({ to: r.querySelector('.peer-to').value, msg: r.querySelector('.peer-msg').value, anon: r.querySelector('.peer-anon-cb').checked }))
@@ -1135,11 +1158,11 @@ document.getElementById('selfSubmit').onclick = async () => {
   };
   try {
     const res = await submitSelf(payload);
-    if (res.reason === 'demo') { showSelfResult('ok', '🔒 示範模式：這裡不會實際送出，僅供參考。'); btn.disabled = false; }
-    else if (res.ok) { clearSelfDraft(quarter); showSelfResult('ok', `已完成 ${qLabel(quarter)} 的自評，謝謝！`); document.getElementById('selfForms').style.display = 'none'; }
-    else if (res.reason === 'duplicate') { clearSelfDraft(quarter); showSelfResult('ok', `你已經自評過 ${qLabel(quarter)} 了，謝謝！`); btn.disabled = false; }
+    if (res.reason === 'demo') { done(); showSelfResult('ok', '🔒 示範模式：這裡不會實際送出，僅供參考。'); }
+    else if (res.ok) { done(false); clearSelfDraft(quarter); showSelfResult('ok', `已完成 ${qLabel(quarter)} 的自評，謝謝！`); document.getElementById('selfForms').style.display = 'none'; }
+    else if (res.reason === 'duplicate') { done(false); clearSelfDraft(quarter); showSelfResult('ok', `你已經自評過 ${qLabel(quarter)} 了，謝謝！`); }
     else { throw new Error('rejected'); }
-  } catch { showSelfResult('err', '送出失敗，請稍後再試一次'); btn.disabled = false; }
+  } catch { done(); showSelfResult('err', '送出失敗，請稍後再試一次'); }
 };
 
 init();
