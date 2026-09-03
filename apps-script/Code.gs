@@ -162,7 +162,7 @@ function publicConfig() {
   const hit = cache.get('publicConfig');
   if (hit) return JSON.parse(hit);
   const cfg = {
-    ver: 17, // 部署版本標記（17：新人入職考核＝店長單獨評，到職滿一個月開放）
+    ver: 18, // 部署版本標記（18：登入回應加 alreadySelfDone，自評也鎖已送出）
     quarter: currentQuarter(),
     accounts: readAccounts().map((a) => ({ name: a.name, role: a.role })),
     banks: {
@@ -272,6 +272,7 @@ function handleLogin(p) {
   return {
     ok: true, name: acc.name, role: acc.role, quarter,
     alreadyDone: alreadySubmitted(quarter, acc.name),
+    alreadySelfDone: alreadySelfSubmitted(quarter, acc.name), // 自評也要鎖，否則同仁會白填一次才被擋
     isManager: isStoreManager(acc.name), // 店長才看得到「新人考核」分頁
   };
 }

@@ -4,6 +4,7 @@ import {
 } from './api.js';
 import { round1, raterTotal, averageTotals, averageItems, finalScore, kpiTotal, kpiItemScore, ftAttitudeScale, capScore, gradeFor, wageTierIndex } from './scoring.js';
 import { newbieScore } from './newbie.js';
+import { btnWaiting } from './ui.js';
 
 // 取某正職的職稱範本項目
 function ftItemsFor(ratee) {
@@ -288,24 +289,28 @@ function renderFinalizeBar() {
     if (!window.confirm(`要定稿「${quarterLabel(CURRENT_Q)}」嗎？\n\n會把目前 ${people} 位同仁的分數存成最終值，之後修改職稱範本不會再影響這一季。${warn}`)) return;
     const btn = document.getElementById('btnFinalize');
     const msg = document.getElementById('finalizeMsg');
-    btn.disabled = true; msg.textContent = '定稿中…';
+    const done = btnWaiting(btn, '定稿中…');
+    msg.textContent = '';
     try {
       const res = await submitSaveResults({ type: 'saveResults', passcode: PASS, quarter: CURRENT_Q, rows });
       if (!res.ok) throw new Error();
-    } catch { msg.textContent = '定稿失敗，請重試'; btn.disabled = false; return; }
-    try { await reload(); document.getElementById('finalizeMsg').textContent = '✅ 已定稿'; } catch { msg.textContent = '✅ 已定稿（請重新整理）'; }
+    } catch { done(); msg.textContent = '定稿失敗，請重試'; return; }
+    try { await reload(); done(); document.getElementById('finalizeMsg').textContent = '✅ 已定稿'; }
+    catch { done(); msg.textContent = '✅ 已定稿（請重新整理）'; }
   };
 
   if (document.getElementById('btnUnfinalize')) {
     document.getElementById('btnUnfinalize').onclick = async () => {
       if (!window.confirm(`要解除「${quarterLabel(CURRENT_Q)}」的定稿嗎？\n\n解除後本季分數會回到即時計算（會再次隨評分／範本變動）。`)) return;
       const msg = document.getElementById('finalizeMsg');
-      msg.textContent = '解除中…';
+      const done = btnWaiting(document.getElementById('btnUnfinalize'), '解除中…');
+      msg.textContent = '';
       try {
         const res = await submitClearResults({ type: 'clearResults', passcode: PASS, quarter: CURRENT_Q });
         if (!res.ok) throw new Error();
-      } catch { msg.textContent = '解除失敗，請重試'; return; }
-      try { await reload(); document.getElementById('finalizeMsg').textContent = '✅ 已解除定稿'; } catch { msg.textContent = '✅ 已解除（請重新整理）'; }
+      } catch { done(); msg.textContent = '解除失敗，請重試'; return; }
+      try { await reload(); done(); document.getElementById('finalizeMsg').textContent = '✅ 已解除定稿'; }
+      catch { done(); msg.textContent = '✅ 已解除（請重新整理）'; }
     };
   }
 }
@@ -485,12 +490,13 @@ function renderDetail(ratee) {
       const t = document.getElementById('ftTitleSel').value;
       const msg = document.getElementById('ftTitleMsg');
       const btn = document.getElementById('saveFtTitle');
-      btn.disabled = true; msg.textContent = '儲存中…';
+      const done = btnWaiting(btn, '儲存中…');
+      msg.textContent = '';
       try {
         const res = await submitFtTitle({ type: 'ftTitle', passcode: PASS, ratee, title: t });
         if (!res.ok) throw new Error();
-      } catch { msg.textContent = '儲存失敗，請重試'; btn.disabled = false; return; }
-      try { await reload(); renderDetail(ratee); } catch { msg.textContent = '✅ 已儲存（請重新整理）'; btn.disabled = false; }
+      } catch { done(); msg.textContent = '儲存失敗，請重試'; return; }
+      try { done(); await reload(); renderDetail(ratee); } catch { done(); msg.textContent = '✅ 已儲存（請重新整理）'; }
     };
   }
   // 儲存 KPI 評分（等級＋實際值）
@@ -503,15 +509,16 @@ function renderDetail(ratee) {
       const btn = document.getElementById('savePerf');
       const msg = document.getElementById('perfMsg');
       if (items.some((it) => !sel[it.key])) { msg.textContent = '請每一項都選等級'; return; }
-      btn.disabled = true; msg.textContent = '儲存中…';
+      const done = btnWaiting(btn, '儲存中…');
+      msg.textContent = '';
       try {
         const res = await submitSupervisorPerf({ type: 'supervisorPerf', passcode: PASS, quarter: CURRENT_Q, ratee, sel, actual });
         if (!res.ok) throw new Error();
-      } catch { msg.textContent = '儲存失敗，請重試'; btn.disabled = false; return; }
+      } catch { done(); msg.textContent = '儲存失敗，請重試'; return; }
       try {
-        await reload(); renderDetail(ratee);
+        done(); await reload(); renderDetail(ratee);
         document.getElementById('perfMsg').textContent = '✅ 已儲存';
-      } catch { msg.textContent = '✅ 已儲存（畫面更新失敗，請重新整理）'; btn.disabled = false; }
+      } catch { done(); msg.textContent = '✅ 已儲存（畫面更新失敗，請重新整理）'; }
     };
   }
   // 範本編輯：新增/刪除項目、儲存整組
@@ -536,29 +543,31 @@ function renderDetail(ratee) {
       });
       const btn = document.getElementById('saveFtTpl');
       const msg = document.getElementById('ftTplMsg');
-      btn.disabled = true; msg.textContent = '儲存中…';
+      const done = btnWaiting(btn, '儲存中…');
+      msg.textContent = '';
       try {
         const res = await submitFtTemplate({ type: 'ftTemplate', passcode: PASS, title, items });
         if (!res.ok) throw new Error();
-      } catch { msg.textContent = '儲存失敗，請重試'; btn.disabled = false; return; }
-      try { await reload(); renderDetail(ratee); } catch { msg.textContent = '✅ 已儲存（請重新整理）'; btn.disabled = false; }
+      } catch { done(); msg.textContent = '儲存失敗，請重試'; return; }
+      try { done(); await reload(); renderDetail(ratee); } catch { done(); msg.textContent = '✅ 已儲存（請重新整理）'; }
     };
   }
   document.getElementById('saveFb').onclick = async () => {
     const btn = document.getElementById('saveFb');
     const msg = document.getElementById('fbMsg');
-    btn.disabled = true; msg.textContent = '儲存中…';
+    const done = btnWaiting(btn, '儲存中…');
+    msg.textContent = '';
     try {
       const res = await submitSupervisorFeedback({
         type: 'supervisorFeedback', passcode: PASS, quarter: CURRENT_Q, ratee,
         text: document.getElementById('fbText').value,
       });
       if (!res.ok) throw new Error();
-    } catch { msg.textContent = '儲存失敗，請重試'; btn.disabled = false; return; }
+    } catch { done(); msg.textContent = '儲存失敗，請重試'; return; }
     try {
-      await reload(); renderDetail(ratee);
+      done(); await reload(); renderDetail(ratee);
       document.getElementById('fbMsg').textContent = '✅ 已儲存';
-    } catch { msg.textContent = '✅ 已儲存（畫面更新失敗，請重新整理）'; btn.disabled = false; }
+    } catch { done(); msg.textContent = '✅ 已儲存（畫面更新失敗，請重新整理）'; }
   };
   document.getElementById('saveAdj').onclick = async () => {
     const payload = {
@@ -570,15 +579,16 @@ function renderDetail(ratee) {
     };
     const btn = document.getElementById('saveAdj');
     const msg = document.getElementById('adjMsg');
-    btn.disabled = true; msg.textContent = '儲存中…';
+    const done = btnWaiting(btn, '儲存中…');
+    msg.textContent = '';
     try {
       const res = await submitAdjust(payload);
       if (!res.ok) throw new Error();
-    } catch { msg.textContent = '儲存失敗，請重試'; btn.disabled = false; return; }
+    } catch { done(); msg.textContent = '儲存失敗，請重試'; return; }
     try {
-      await reload(); renderDetail(ratee);
+      done(); await reload(); renderDetail(ratee);
       document.getElementById('adjMsg').textContent = '✅ 已儲存';
-    } catch { msg.textContent = '✅ 已儲存（畫面更新失敗，請重新整理）'; btn.disabled = false; }
+    } catch { done(); msg.textContent = '✅ 已儲存（畫面更新失敗，請重新整理）'; }
   };
 }
 
@@ -627,8 +637,10 @@ document.getElementById('enter').onclick = async () => {
   PASS = document.getElementById('pass').value;
   fillAdminSelectors();
   CURRENT_Q = selectedAdminQuarter();
+  const done = btnWaiting(document.getElementById('enter'), '開啟中…');
   try {
     const data = await fetchAdminData(PASS, CURRENT_Q);
+    done();
     if (data.error) { document.getElementById('gateErr').style.display = 'block'; return; }
     DATA = data;
     document.getElementById('gate').style.display = 'none';
@@ -641,6 +653,7 @@ document.getElementById('enter').onclick = async () => {
     renderGradePlacement(rows);
     renderCompany();
   } catch {
+    done();
     document.getElementById('gateErr').style.display = 'block';
     document.getElementById('gateErr').textContent = '連線失敗，請稍後再試';
   }

@@ -3,6 +3,7 @@ import { buildDemoData } from './demo.js';
 import { splitPeerSubmission } from './validate.js';
 import { averageItems, round1, kpiItemScore, ftAttitudeScale, gradeFor, GRADE_TABLE, wageTierIndex, capScore } from './scoring.js';
 import { newbieStatus, pendingList, newbieScore } from './newbie.js';
+import { btnWaiting } from './ui.js';
 
 const state = { me: null, auth: null, config: null, ratings: new Map(), fillQuarter: null, self: null, selfQuarter: null };
 
@@ -378,24 +379,6 @@ function addPeerRow(to, msg, anon) {
 }
 function escapeHtml(s) {
   return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-}
-
-// 慢動作按鈕：按下後顯示「進行中＋已等待幾秒」，避免同仁以為當機沒反應。
-// 打後端要 2～4 秒，原本只把按鈕變灰、文字不變，畫面看起來像沒動作。
-// 回傳「結束」函式：呼叫它恢復原文字；傳 false 表示維持不可按（例如已送出成功）。
-function btnWaiting(btn, label) {
-  const original = btn.dataset.origLabel || btn.textContent;
-  btn.dataset.origLabel = original;
-  btn.disabled = true;
-  let sec = 0;
-  const paint = () => { btn.textContent = sec ? `${label} ${sec} 秒` : label; };
-  paint();
-  const timer = setInterval(() => { sec += 1; paint(); }, 1000);
-  return (restore = true) => {
-    clearInterval(timer);
-    btn.textContent = original;
-    if (restore) btn.disabled = false;
-  };
 }
 
 function showResult(cls, text) {
@@ -1039,6 +1022,16 @@ document.getElementById('loginBtn').onclick = async () => {
       document.getElementById('submit').disabled = true;
       showResult('ok', `你已經送出過 ${qLabel(state.fillQuarter)} 的評鑑，謝謝！每人每季只能送出一次，無法再修改或重填。`);
     }
+    // 本季已送出過自評 → 同樣收起表單與留言欄、鎖送出鈕（舊版沒有這道鎖，同仁會白填一次才被後端擋掉）
+    if (res.alreadySelfDone && state.selfQuarter) {
+      clearSelfDraft(state.selfQuarter);
+      ['selfHint', 'selfForms', 'selfMsgs'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+      });
+      document.getElementById('selfSubmit').disabled = true;
+      showSelfResult('ok', `你已經送出過 ${qLabel(state.selfQuarter)} 的自評，謝謝！每人每季只能送出一次，無法再修改或重填。`);
+    }
   } catch {
     doneBtn();
     errBox.style.display = 'block'; errBox.textContent = '連線失敗，請稍後再試';
@@ -1060,7 +1053,8 @@ document.getElementById('savePw').onclick = async () => {
   if (!pw || pw.length < 4) { msg.className = 'msg err'; msg.textContent = '新密碼至少 4 碼'; return; }
   if (pw !== pw2) { msg.className = 'msg err'; msg.textContent = '兩次輸入不一致'; return; }
   const btn = document.getElementById('savePw');
-  btn.disabled = true; msg.className = 'muted'; msg.textContent = '儲存中…';
+  const done = btnWaiting(btn, '儲存中…');
+  msg.className = 'muted'; msg.textContent = '';
   try {
     const res = await changePassword(state.auth.account, state.auth.password, pw);
     if (res.ok) {
@@ -1073,7 +1067,7 @@ document.getElementById('savePw').onclick = async () => {
       msg.textContent = res.reason === 'tooshort' ? '新密碼至少 4 碼' : '更新失敗，請重試';
     }
   } catch { msg.className = 'msg err'; msg.textContent = '連線失敗，請稍後再試'; }
-  btn.disabled = false;
+  done();
 };
 
 // 送出前的確認小視窗：回傳 true=確定送出、false=回去繼續填
