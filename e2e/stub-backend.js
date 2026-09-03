@@ -2,7 +2,7 @@
 // 資料存 localStorage（跨重新整理仍在），只給 e2e/run.py 用，不會出現在正式站。
 (function () {
   var KEY = 'e2e_store';
-  var PASSCODE = '9999';
+  var PASSCODE = (typeof window !== 'undefined' && window.__E2E_DATA && window.__E2E_DATA.passcode) || '9999';
 
   function load() {
     try { return JSON.parse(localStorage.getItem(KEY) || 'null') || fresh(); } catch (e) { return fresh(); }
@@ -12,39 +12,15 @@
     return { peer: [], self: [], selfMsgs: [], perf: [], adjust: [], feedback: [], newbie: [], results: {}, pw: {} };
   }
 
-  // ── 固定測試資料 ─────────────────────────────────────────────
-  var ACCOUNTS = [
-    { name: '張羽成', role: '正職', account: '001' },
-    { name: '蕭彣芳', role: '正職', account: '002' },
-    { name: '許雅筑', role: '計時', account: '003' },
-    { name: '王鈺屏', role: '計時', account: '004' },
-    { name: '林宸妤', role: '計時', account: '005' },
-    { name: '徐佑昕', role: '計時', account: '006' },
-    { name: '陳盈如', role: '正職', account: '007' },
-    { name: '王禹婕', role: '計時', account: '008' },
-    { name: '范家嘉', role: '計時', account: '009', hireDate: '2026-08-01' },
-  ];
-  function bank(prefix, n) {
-    var out = [];
-    for (var i = 1; i <= n; i++) {
-      out.push({ key: prefix + i, label: prefix + ' 題目 ' + i, levels: ['5星說明', '4星說明', '3星說明', '2星說明', '1星說明'] });
-    }
-    return out;
-  }
-  var BANKS = { ptAttitude: bank('pa', 6), ptPerf: bank('pp', 14), ftAttitude: bank('fa', 5), ftPerf: [] };
-  var TIERS = [['96 分以上', '340 元'], ['91～95 分', '300 元'], ['86～90 分', '280 元'],
-    ['81～85 分', '230 元'], ['76～80 分', '220 元'], ['71～75 分', '210 元'],
-    ['66～70 分', '205 元'], ['65 分以下', '法定時薪']];
-  function tpl() {
-    return [
-      { no: 1, key: 'sk1', type: '技能', label: '技能項目一', target: '目標A', levels: { A: '全達成', B: '八成', C: '六成', D: '四成' }, weight: 20 },
-      { no: 2, key: 'sk2', type: '技能', label: '技能項目二', target: '目標B', levels: { A: '全達成', B: '八成', C: '六成', D: '四成' }, weight: 20 },
-      { no: 3, key: 'ex1', type: '執行力', label: '執行力項目一', target: '', levels: { A: '完成', B: '', C: '', D: '未完成' }, weight: 15 },
-      { no: 4, key: 'ex2', type: '執行力', label: '執行力項目二', target: '', levels: { A: '完成', B: '', C: '', D: '未完成' }, weight: 15 },
-    ];
-  }
-  var FT_TEMPLATES = { '店長': tpl(), '儲備幹部': tpl() };
-  var FT_TITLES = { '蕭彣芳': '店長', '張羽成': '儲備幹部', '陳盈如': '儲備幹部' };
+  // ── 測試資料由 run.py 每次隨機產生後注入（window.__E2E_DATA）──────
+  // 刻意不寫死：用開發當時那組熟悉的資料去測，只能證明「系統對那組資料能動」。
+  var D = (typeof window !== 'undefined' && window.__E2E_DATA) || {};
+  var ACCOUNTS = D.accounts;
+  var BANKS = D.banks;
+  var TIERS = D.tiers;
+  var FT_TEMPLATES = D.ftTemplates;
+  var FT_TITLES = D.ftTitles;
+  if (!ACCOUNTS || !BANKS) throw new Error('e2e stub：沒有收到 window.__E2E_DATA，run.py 沒注入資料');
 
   // ── 與 Code.gs 相同的規則 ────────────────────────────────────
   function currentQuarter() {
@@ -58,7 +34,7 @@
     var acc = null;
     ACCOUNTS.forEach(function (a) { if (a.account === String(account)) acc = a; });
     if (!acc) return null;
-    var pw = st.pw[acc.account] || '0000';
+    var pw = st.pw[acc.account] || D.defaultPassword || '0000';
     return String(password) === pw ? acc : null;
   }
   function isManager(name) { return FT_TITLES[name] === '店長'; }
