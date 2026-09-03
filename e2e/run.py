@@ -29,6 +29,7 @@ import time
 from playwright.sync_api import sync_playwright
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SHOTS = os.path.join(ROOT, 'e2e', 'artifacts')
 PORT = 8799
 BASE = f'http://localhost:{PORT}/'
 PASSCODE = '9999'
@@ -81,6 +82,11 @@ INIT_SCRIPT = r"""
 """
 
 
+def shot(page, name):
+    os.makedirs(SHOTS, exist_ok=True)
+    page.screenshot(path=os.path.join(SHOTS, name + '.png'), full_page=True)
+
+
 def wait_text(page, selector, text, timeout=15000):
     page.wait_for_function(
         """([sel, txt]) => { const e = document.querySelector(sel); return e && e.textContent.includes(txt); }""",
@@ -130,6 +136,9 @@ def fill_and_submit_all(page):
         # 互評：所有受評者所有題目都點 v 星
         page.wait_for_selector('#forms details.ratee', timeout=15000)
         page.evaluate("(v) => { document.querySelectorAll('#forms details.ratee .stars').forEach(st => st.children[v-1].click()); }", v)
+        if i == 0:
+            page.evaluate("() => { const c = document.querySelector('#forms details.ratee'); c.open = true; c.querySelector('details.cat').open = true; }")
+            shot(page, '01-互評表單已填')
         page.click('#submit')
         page.wait_for_selector('#confirmOverlay', state='visible', timeout=15000)
         if i == 0:
@@ -184,6 +193,7 @@ def newbie_flow(page):
     page.wait_for_selector('#confirmOverlay', state='visible', timeout=15000)
     ctext = page.evaluate("() => document.getElementById('confirmText').textContent")
     check('新人考核確認視窗分數正確', ('24' in ctext and '56' in ctext and '80' in ctext), ctext)
+    shot(page, '02-新人考核確認視窗')
     page.click('#confirmOk')
     wait_text(page, '#newbiePane', '目前沒有需要考核的新人')
     check('送出後從待辦消失、進已完成', page.evaluate("() => document.getElementById('newbiePane').textContent.includes('已完成的入職考核')"))
@@ -283,6 +293,7 @@ def phase_b_scores(page):
     check('寫給自己的話顯示', '下季加油' in txt)
     check('計時不顯示考核等第表', '獎金發放基數' not in txt)
     check('單一季不顯示查詢下拉', not visible(page, '#qSelect'))
+    shot(page, '03-范家嘉我的成績')
     logout(page)
 
     # 蕭彣芳（正職、店長、KPI 全 A）
@@ -324,6 +335,7 @@ def phase_b_admin(page):
     check('等第：蕭94A／張86A／陳78B', ('94' in place and '86' in place and '78' in place and 'B' in place), place)
     check('落點：范家嘉 81～85／230', ('81～85' in place and '230' in place), place)
     check('對公司的話（匿名）', page.evaluate("() => document.getElementById('companyMsgs').textContent.includes('希望多辦聚餐')"))
+    shot(page, '04-主管總覽與等第落點')
     # 明細裡的入職考核卡
     page.click('a[data-r="范家嘉"]')
     page.wait_for_selector('#detail', timeout=15000)
