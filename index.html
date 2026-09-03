@@ -8,10 +8,10 @@
   <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
   <meta name="apple-mobile-web-app-title" content="評核">
   <link rel="stylesheet" href="css/style.css" />
+  <script src="js/daylight.js"></script>
+  <script src="js/skyscape.js" defer></script>
 </head>
 <body>
-  <video class="fireVid" src="assets/fire.mp4" autoplay muted loop playsinline aria-hidden="true"></video>
-  <div class="scrim" aria-hidden="true"></div>
   <div class="wrap">
     <header class="app-header">
       <div class="ribbon">麻・辣</div>
@@ -68,6 +68,7 @@
           <button id="btnFill" class="tab active">填寫評鑑</button>
           <button id="btnSelf" class="tab">自評</button>
           <button id="btnMyScores" class="tab">我的成績</button>
+          <button id="btnNewbie" class="tab" style="display:none">新人考核</button>
         </div>
 
         <!-- 填寫區 -->
@@ -103,6 +104,9 @@
 
         <!-- 我的成績區 -->
         <div id="scorePane" style="display:none"></div>
+
+        <!-- 新人考核區（到職滿一個月，只有店長看得到這個分頁） -->
+        <div id="newbiePane" style="display:none"></div>
       </div>
     </div>
 
@@ -146,23 +150,6 @@
     </div>
   </div>
 
-  <script>
-    // 背景火焰影片（純視覺，不影響功能）——與打卡系統同一套：
-    // 系統設「減少動態」→ 暫停；否則若 autoplay 被瀏覽器政策擋下，主動嘗試播放，
-    // 再不行就等第一次觸碰畫面（使用者手勢）補播——涵蓋 LINE 內建瀏覽器等嚴格環境。
-    (function () {
-      var fv = document.querySelector('.fireVid');
-      if (!fv) return;
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        fv.pause(); fv.removeAttribute('autoplay');
-        return;
-      }
-      var tryPlay = function () { var p = fv.play(); if (p && p.catch) p.catch(function () {}); };
-      tryPlay();
-      document.addEventListener('touchstart', tryPlay, { once: true });
-      document.addEventListener('click', tryPlay, { once: true });
-    })();
-  </script>
   <script type="module" src="js/eval-page.js"></script>
   <script type="module" src="js/admin-page.js"></script>
 </body>

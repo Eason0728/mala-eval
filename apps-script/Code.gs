@@ -13,7 +13,7 @@ function setupSheet() {
     return sh;
   };
   const cfg = ensure('設定', null);
-  ensure('帳號', ['姓名', '角色', '帳號', '密碼', '啟用']);
+  ensure('帳號', ['姓名', '角色', '帳號', '密碼', '啟用', '到職日']);
   ensure('評分紀錄', ['時間戳', '季度', '評核者', '評核者角色', '受評者', '受評者角色', '類別', '分數JSON', '備註']);
   ensure('主管評分', ['季度', '受評者', '分數JSON', '時間', '操作者']);
   ensure('主管調整', ['季度', '受評者', '態度調整', '態度原因', '表現調整', '表現原因', '時間', '操作者']);
@@ -86,10 +86,26 @@ function readBank(name) {
 // 帳號分頁：姓名｜角色｜帳號｜密碼｜啟用。角色僅接受「正職」／「計時」，其他值直接丟錯（別靜默跳過，
 // 避免打錯字的人被悄悄漏掉）。啟用欄僅接受布林 true 或字串 'TRUE'（trim、不分大小寫），其餘一律視為
 // 停用——別用 r[4]===true 單獨判斷，否則試算表用文字 TRUE 會把全員誤停用。
+// 日期欄一律轉成 yyyy-MM-dd 字串再交給前端（試算表填日期或純文字都吃得下）。
+function fmtDate(v) {
+  if (!v) return '';
+  if (v instanceof Date) return Utilities.formatDate(v, 'Asia/Taipei', 'yyyy-MM-dd');
+  return String(v).trim();
+}
+// 帳號分頁的資料列（A2 起，6 欄）。原本讀命名範圍 CFG_accounts（A2:E200，只有 5 欄），
+// 2026-09-03 加第 6 欄「到職日」後改成直接讀分頁——使用者不必再跑 fixAccountsRange 擴範圍，
+// 也不會因為範圍沒更新而讀不到到職日。分頁不在時才退回命名範圍（相容舊表）。
+function accountRows() {
+  const sh = ss().getSheetByName('帳號');
+  if (!sh) return rng('CFG_accounts').getValues();
+  const last = sh.getLastRow();
+  if (last < 2) return [];
+  return sh.getRange(2, 1, last - 1, 6).getValues();
+}
 function readAccounts() {
   const isEnabled = (v) => v === true || String(v).trim().toUpperCase() === 'TRUE';
   const out = [];
-  rng('CFG_accounts').getValues().forEach((r) => {
+  accountRows().forEach((r) => {
     if (!r[0]) return; // 無姓名的空列跳過
     if (!isEnabled(r[4])) return; // 停用列先跳過——角色驗證只管會被計入的列，半完成的列不炸全站
     const name = String(r[0]).trim();
@@ -98,7 +114,7 @@ function readAccounts() {
     if (role !== '正職' && role !== '計時') {
       throw new Error('帳號分頁「' + name + '」的角色欄是「' + roleRaw + '」，只能填「正職」或「計時」');
     }
-    out.push({ name, role, account: String(r[2]), password: String(r[3]) });
+    out.push({ name, role, account: String(r[2]), password: String(r[3]), hireDate: fmtDate(r[5]) });
   });
   return out;
 }
@@ -146,7 +162,7 @@ function publicConfig() {
   const hit = cache.get('publicConfig');
   if (hit) return JSON.parse(hit);
   const cfg = {
-    ver: 16, // 部署版本標記（16：參觀帳號 test/test 唯讀看設定）
+    ver: 17, // 部署版本標記（17：新人入職考核＝店長單獨評，到職滿一個月開放）
     quarter: currentQuarter(),
     accounts: readAccounts().map((a) => ({ name: a.name, role: a.role })),
     banks: {
@@ -177,6 +193,75 @@ function findAccount(account, password) {
 // 刻意不放進「帳號」分頁——才不會出現在互評名單、不會被計分、也無法送出（findAccount 找不到）。
 function isVisitor(p) { return String(p.account) === 'test' && String(p.password) === 'test'; }
 
+// ====== 新人入職考核（2026-09-03）======
+// 新進同仁到職滿一個月，由「店長」單獨考核一次，題目與計時同仁相同（態度30＋表現70）。
+// 一人只做一次，做完就照常參加每季全員互評。分數計算一律在前端（js/newbie.js），這裡只存取。
+var NEWBIE_HEADER = ['時間', '受評者', '到職日', '評核者', '態度JSON', '表現JSON'];
+function newbieSheet() {
+  let sh = ss().getSheetByName('新人考核');
+  if (!sh) {
+    try {
+      sh = ss().insertSheet('新人考核');
+      sh.getRange(1, 1, 1, NEWBIE_HEADER.length).setValues([NEWBIE_HEADER]);
+    } catch (e) { sh = ss().getSheetByName('新人考核'); } // 併發建立時讓後到者直接讀
+  }
+  return sh;
+}
+function readNewbie() {
+  const sh = newbieSheet();
+  if (!sh) return [];
+  const v = sh.getDataRange().getValues();
+  const out = [];
+  for (let i = 1; i < v.length; i++) {
+    if (!v[i][1]) continue;
+    var att = [];
+    var perf = [];
+    try { att = JSON.parse(v[i][4] || '[]'); } catch (e) { att = []; }
+    try { perf = JSON.parse(v[i][5] || '[]'); } catch (e) { perf = []; }
+    out.push({
+      time: v[i][0], ratee: String(v[i][1]), hireDate: fmtDate(v[i][2]),
+      rater: String(v[i][3]), attitude: att, performance: perf,
+    });
+  }
+  return out;
+}
+// 店長＝「正職職稱」分頁裡職稱寫「店長」的人。不另外維護名單，三店擴充時同一套邏輯。
+function isStoreManager(name) {
+  return String(readFtTitles()[name] || '').trim() === '店長';
+}
+// p: { type:'newbieList', account, password } → 回帳號名單（含到職日）與已考核者，
+// 「誰現在該考核」由前端 js/newbie.js 判斷（純函式、有測試）。
+function handleNewbieList(p) {
+  const acc = findAccount(p.account, p.password);
+  if (!acc) return { ok: false, reason: 'unauthorized' };
+  if (!isStoreManager(acc.name)) return { ok: false, reason: 'forbidden' };
+  return {
+    ok: true,
+    accounts: readAccounts().map((a) => ({ name: a.name, role: a.role, hireDate: a.hireDate })),
+    done: readNewbie().map((r) => ({ ratee: r.ratee, rater: r.rater, time: r.time })),
+  };
+}
+// p: { type:'newbieSubmit', account, password, ratee, attitude:[], performance:[] }
+// 受評者、到職日一律以試算表為準，不信前端；一人一次，重送回 duplicate。
+function handleNewbieSubmit(p) {
+  const acc = findAccount(p.account, p.password);
+  if (!acc) return { ok: false, reason: 'unauthorized' };
+  if (!isStoreManager(acc.name)) return { ok: false, reason: 'forbidden' };
+  const ratee = String(p.ratee || '').trim();
+  const target = readAccounts().find((a) => a.name === ratee);
+  if (!target) return { ok: false, reason: 'no ratee' };
+  if (!target.hireDate) return { ok: false, reason: 'no hire date' };
+  if (readNewbie().some((r) => r.ratee === ratee)) return { ok: false, reason: 'duplicate' };
+  const bad = (v) => !(Number(v) >= 1 && Number(v) <= 5);
+  const att = Array.isArray(p.attitude) ? p.attitude : [];
+  const perf = Array.isArray(p.performance) ? p.performance : [];
+  if (!att.length || !perf.length || att.some(bad) || perf.some(bad)) return { ok: false, reason: 'incomplete' };
+  newbieSheet().appendRow([
+    new Date(), ratee, target.hireDate, acc.name, JSON.stringify(att), JSON.stringify(perf),
+  ]);
+  return { ok: true };
+}
+
 function handleLogin(p) {
   if (isVisitor(p)) {
     return { ok: true, visitor: true, name: '參觀帳號', role: '參觀', quarter: currentQuarter(), ftTemplates: readFtTemplates() };
@@ -184,7 +269,11 @@ function handleLogin(p) {
   const acc = readAccounts().find((a) => a.account === String(p.account) && a.password === String(p.password));
   if (!acc) return { ok: false, reason: 'invalid' };
   const quarter = currentQuarter();
-  return { ok: true, name: acc.name, role: acc.role, quarter, alreadyDone: alreadySubmitted(quarter, acc.name) };
+  return {
+    ok: true, name: acc.name, role: acc.role, quarter,
+    alreadyDone: alreadySubmitted(quarter, acc.name),
+    isManager: isStoreManager(acc.name), // 店長才看得到「新人考核」分頁
+  };
 }
 
 // p: { type:'peer', account, password, ratings:[{ratee, rateeRole, attitude:[], performance:[]|null}] }
@@ -494,6 +583,7 @@ function readAdminData(passcode, quarter) {
   return {
     config: publicConfig(), peerRecords, supervisorPerf, adjustments, results, selfRecords,
     companyMessages, supervisorFeedback, ftTemplates: readFtTemplates(), ftTitles: readFtTitles(),
+    newbieRecords: readNewbie(), // 新人入職考核（不分季，一人一筆）
   };
 }
 
@@ -558,6 +648,8 @@ function doPost(e) {
     if (p.type === 'supervisorFeedback') return jsonOut(handleSupervisorFeedback(p));
     if (p.type === 'saveResults') return jsonOut(handleSaveResults(p));
     if (p.type === 'clearResults') return jsonOut(handleClearResults(p));
+    if (p.type === 'newbieList') return jsonOut(handleNewbieList(p));
+    if (p.type === 'newbieSubmit') return jsonOut(handleNewbieSubmit(p));
     return jsonOut({ ok: false, reason: 'unknown type' });
   } finally {
     lock.releaseLock();
@@ -700,9 +792,12 @@ function handleMyScores(p) {
       if (fv[i][1] === name && String(fv[i][2] || '').trim()) supervisorFeedback.push({ quarter: fv[i][0], msg: fv[i][2] });
     }
   }
+  // 自己的入職考核（新人才有，一人一筆；沒有就是 null）
+  const myNewbie = readNewbie().find((r) => r.ratee === name) || null;
   return {
     ok: true, name, role: acc.role, records, supervisorPerf, seeded: readResultDetail(name),
     self, messagesToMe, myNotes, supervisorFeedback, adjustments, ftTitle, ftTemplate,
+    newbie: myNewbie, hireDate: acc.hireDate,
   };
 }
 

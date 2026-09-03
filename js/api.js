@@ -48,6 +48,13 @@ export function submitSaveResults(payload) { return _demo ? demoWrite() : postJS
 export function submitClearResults(payload) { return _demo ? demoWrite() : postJSON(payload); }
 export function changePasswordDemoGuard() { return _demo; }
 
+// ===== 新人入職考核（店長專用）=====
+export function fetchNewbieList(account, password) {
+  if (_demo) return Promise.resolve({ ok: false, reason: 'demo' });
+  return postJSON({ type: 'newbieList', account, password });
+}
+export function submitNewbie(payload) { return _demo ? demoWrite() : postJSON(payload); }
+
 export async function fetchAdminData(passcode, quarter) {
   if (_demo && _demoData) return _demoData.adminData; // 示範：任何通行碼都回假資料
   const url = `${APPS_SCRIPT_URL}?action=adminData`

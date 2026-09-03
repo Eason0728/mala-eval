@@ -4,31 +4,66 @@
   --gold: #ffd803;        /* 火焰金 */
   --gold-deep: #f7a50a;
   --ink: #241a15;         /* 近黑（暖） */
-  --bg: #a81f08;          /* 深品牌紅（頁面底） */
+  --bg: #f4eee2;          /* 天色（頁面底，白天） */
   --card: #fffdf8;        /* 微暖白卡片 */
   --line: #eadcc8;        /* 暖色邊線 */
-  --muted: #a08b72;       /* 暖褐灰 */
+  --muted: #7a6249;       /* 暖褐灰（2026-09-03 加深：淺底上要過 WCAG 4.5:1，見 tools/contrast-check.js） */
+
+  /* ---- 日夜配色：只管「直接坐在頁面底上」的東西，卡片內一律不受影響 ----
+     白天＝麻紙米白，夜晚＝餘燼深炭（由 js/daylight.js 依真實日出日落切 body class）。 */
+  --page-fg: var(--ink);              /* 背景上的主要文字 */
+  --page-fg-muted: var(--muted);      /* 背景上的次要文字 */
+  --page-link: var(--brand-dark);     /* 背景上的連結／文字鈕（深一階才過 4.5:1） */
+  --page-heading: var(--brand-dark);  /* 背景上的區塊標題 */
+  --page-heading-line: var(--gold-deep);
 }
 * { box-sizing: border-box; }
 body {
   margin: 0; color: var(--ink);
   font-family: "PingFang TC", "Noto Sans TC", system-ui, sans-serif;
-  background: radial-gradient(120% 90% at 50% 16%, #c9290b 0%, #a81f08 55%, #8a1906 100%) fixed;
+  background:
+    radial-gradient(72% 52% at 84% -2%, rgba(255, 206, 110, .55) 0%, rgba(255, 206, 110, 0) 62%),
+    radial-gradient(90% 40% at 50% 100%, rgba(236, 214, 182, .55) 0%, rgba(236, 214, 182, 0) 70%),
+    linear-gradient(180deg, #fdf1da 0%, #fbf7ee 46%, #f4eee2 100%) fixed;
   -webkit-font-smoothing: antialiased;
+  transition: background 1.2s ease, color .6s ease;
 }
+
+/* ---- 夜晚：餘燼深炭（右上一團爐火餘光、左下磚紅，四角微壓暗聚焦）---- */
+body.tod-night {
+  --page-fg: #f6ecdd;
+  --page-fg-muted: #c3ab90;
+  --page-link: var(--gold);
+  --page-heading: #fff;
+  --page-heading-line: var(--gold);
+  color: var(--page-fg);
+  background:
+    radial-gradient(58% 40% at 80% 2%,   rgba(150, 180, 255, .18) 0%, rgba(150, 180, 255, 0) 62%),
+    radial-gradient(96% 34% at 50% 102%, rgba(150, 76, 30, .34) 0%, rgba(150, 76, 30, 0) 66%),
+    linear-gradient(180deg, #1b2444 0%, #141b33 54%, #0d1122 100%) fixed;
+}
+/* 卡片永遠是白底，所以卡片內的字一律回到深色，不跟著日夜走 */
+.card, details.ratee, #adminSection { color: var(--ink); }
+/* 坐在頁面底上的區塊：文字跟著日夜走 */
+#forms, #selfForms, #newbiePane, #scorePane { color: var(--page-fg); }
+@media (prefers-reduced-motion: reduce) { body { transition: none; } }
 .wrap { max-width: 780px; margin: 0 auto; padding: 16px 16px 48px; position: relative; z-index: 1; }
 
-/* ---- 背景真實火焰影片（黑底以 screen 混合去除）＋暖色暈影——與打卡系統同一套 ---- */
-.fireVid {
-  position: fixed; inset: 0; width: 100%; height: 100%;
-  object-fit: cover; object-position: center; z-index: 0; pointer-events: none;
-  mix-blend-mode: screen; filter: brightness(1.05) saturate(1.05) contrast(1.05);
-  opacity: 0.55;
-}
-.scrim {
+/* 背景的太陽／月亮（js/skyscape.js 畫在這張畫布上；純裝飾，不擋點擊） */
+#skyCanvas {
   position: fixed; inset: 0; z-index: 0; pointer-events: none;
-  background: radial-gradient(85% 74% at 50% 44%, rgba(42,11,3,0) 0%, rgba(34,9,3,.14) 60%, rgba(20,5,1,.4) 100%);
+  opacity: 0; transition: opacity 1.4s ease;
 }
+body.tod-day #skyCanvas, body.tod-night #skyCanvas { opacity: 1; }
+
+/* ---- 極細顆粒：天空是大面積漸層，沒有它會出現色帶（banding）。淡到近看才發現。 ---- */
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  opacity: .028;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+}
+
+body.tod-night .card, body.tod-night details.ratee { box-shadow: 0 16px 34px -20px rgba(0, 0, 0, .75); }
 
 /* 品牌頁首（紅招牌 hero：emblem＋店名＋麻辣緞帶＋波浪下緣） */
 .app-header {
@@ -80,7 +115,7 @@ h3 { margin: 8px 0; }
 .card {
   background: var(--card); border: 1px solid var(--line);
   border-radius: 16px; padding: 16px; margin: 14px 0;
-  box-shadow: 0 14px 34px -16px rgba(40, 7, 3, .45);
+  box-shadow: 0 12px 28px -18px rgba(90, 55, 25, .38);
 }
 
 /* 登入卡 */
@@ -101,12 +136,12 @@ h3 { margin: 8px 0; }
 
 /* 按鈕 */
 button {
-  background: var(--brand); color: #fff; border: 0; border-radius: 10px;
+  background: var(--brand-dark); color: #fff; border: 0; border-radius: 10px;
   padding: 10px 18px; font-size: 15px; font-weight: 700; cursor: pointer;
   box-shadow: 0 4px 12px rgba(234, 52, 12, .22);
   transition: transform .05s, background .15s;
 }
-button:hover { background: var(--brand-dark); }
+button:hover { background: #a62206; }
 button:active { transform: translateY(1px); }
 button:disabled { opacity: .5; box-shadow: none; cursor: default; }
 
@@ -171,14 +206,14 @@ details.help div { font-size: 13px; color: #7c6f68; margin: 2px 0; }
 
 /* 姓名列 + 修改密碼（右側小連結，點開浮出表單） */
 .hellobar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 6px 0 4px; }
-.hellobar .muted, .hellobar-actions { color: #ffe9c9; }
-.hellobar > .muted { color: #ffe9c9; }
+.hellobar .muted, .hellobar-actions { color: var(--page-fg); }
+.hellobar > .muted { color: var(--page-fg); }
 .hellobar-actions { display: flex; align-items: center; gap: 10px; }
-.hb-sep { color: rgba(255, 233, 201, .5); user-select: none; }
-.linkbtn { background: none; border: 0; box-shadow: none; padding: 0; color: var(--gold); font-weight: 700; font-size: inherit; cursor: pointer; white-space: nowrap; }
+.hb-sep { color: var(--page-fg-muted); opacity: .55; user-select: none; }
+.linkbtn { background: none; border: 0; box-shadow: none; padding: 0; color: var(--page-link); font-weight: 700; font-size: inherit; cursor: pointer; white-space: nowrap; }
 .linkbtn:hover { background: none; text-decoration: underline; }
 .pwbox { position: relative; }
-.pwbox > summary { cursor: pointer; color: var(--gold); font-weight: 700; white-space: nowrap; list-style: none; }
+.pwbox > summary { cursor: pointer; color: var(--page-link); font-weight: 700; white-space: nowrap; list-style: none; }
 .pwbox > summary::-webkit-details-marker { display: none; }
 .pwbox .pwcard { position: absolute; right: 0; top: 100%; z-index: 5; width: 250px; margin-top: 6px; box-shadow: 0 8px 24px rgba(36, 26, 21, .3); }
 
@@ -192,11 +227,11 @@ details.help div { font-size: 13px; color: #7c6f68; margin: 2px 0; }
 /* 分頁（填寫評鑑／我的成績） */
 .tabs { display: flex; gap: 8px; margin: 14px 0; }
 .tab { background: var(--card); color: var(--brand); border: 1.5px solid var(--brand); box-shadow: none; }
-.tab.active { background: var(--brand); color: #fff; box-shadow: 0 4px 12px rgba(234, 52, 12, .22); }
+.tab.active { background: var(--brand-dark); color: #fff; box-shadow: 0 4px 12px rgba(234, 52, 12, .22); }
 
-/* 紅底上的散置文字（卡片外）改亮色，維持可讀 */
-#fillPane > p.muted, #selfPane > p.muted { color: #ffdfba; }
-#forms h2, #selfForms h2 { color: #fff; border-left-color: var(--gold); }
+/* 卡片外的散置文字（直接坐在頁面底上）——米白底用一般暖褐灰即可 */
+#fillPane > p.muted, #selfPane > p.muted { color: var(--page-fg-muted); }
+#forms h2, #selfForms h2, #newbiePane h2 { color: var(--page-heading); border-left-color: var(--page-heading-line); }
 
 /* 我的成績折線圖 */
 .chartwrap { overflow-x: auto; margin-top: 8px; }
@@ -205,7 +240,7 @@ circle.c-prev { fill: #b7a9a2; }
 .c-cur { stroke: var(--brand); }
 circle.c-cur { fill: var(--brand); }
 
-#adminEntry { color: #ffd9a8; font-weight: 600; }
+#adminEntry { color: var(--page-fg-muted); font-weight: 600; }
 
 /* 同仁考核結果（正職／計時兩區塊） */
 .grade-block { margin-top: 12px; }
@@ -222,8 +257,9 @@ circle.c-cur { fill: var(--brand); }
 .print-only { display: none; }
 @page { size: A4 portrait; margin: 10mm; }
 @media print {
-  body { background: #fff !important; }
-  .fireVid, .scrim { display: none !important; }
+  body { background: #fff !important; color: var(--ink) !important; }
+  body.tod-night { --page-fg: var(--ink); --page-fg-muted: var(--muted); --page-heading: var(--brand); }
+  body::before, #skyCanvas { display: none !important; }
   * { animation: none !important; }
   body > .wrap > *:not(#adminSection):not(.app-header) { display: none !important; }
   #gate, .selectors, #progress, #detail, #finalizeBar { display: none !important; }

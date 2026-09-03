@@ -1,7 +1,8 @@
-import { login, fetchConfig, submitPeer, submitSelf, myScores, changePassword, setDemo, setDemoData, isDemo } from './api.js';
+import { login, fetchConfig, submitPeer, submitSelf, myScores, changePassword, setDemo, setDemoData, isDemo, fetchNewbieList, submitNewbie } from './api.js';
 import { buildDemoData } from './demo.js';
 import { splitPeerSubmission } from './validate.js';
 import { averageItems, round1, kpiItemScore, ftAttitudeScale, gradeFor, GRADE_TABLE, wageTierIndex, capScore } from './scoring.js';
+import { newbieStatus, pendingList, newbieScore } from './newbie.js';
 
 const state = { me: null, auth: null, config: null, ratings: new Map(), fillQuarter: null, self: null, selfQuarter: null };
 
@@ -629,6 +630,26 @@ function wageBlock(myScore) {
   return `<div class="card"><b>💰 分數落點時薪對照</b><table><tr><th>實際分數</th><th>時薪</th></tr>${rows}</table></div>`;
 }
 
+// 入職考核結果卡（新人才有；showWage＝還沒有任何季成績時，順便顯示時薪落點）
+function newbieResultBlock(data, showWage) {
+  const n = data && data.newbie;
+  if (!n) return '';
+  const sc = newbieScore(n.attitude || [], n.performance || []);
+  const rowsOf = (items, scores) => items.map((it, i) => {
+    const v = (scores || [])[i];
+    return `<tr><td>${escapeHtml(it.label)}</td><td>${v === undefined || v === null ? '—' : v}</td></tr>`;
+  }).join('');
+  const detail = '<details style="margin-top:8px"><summary class="muted" style="cursor:pointer">看每一題的分數</summary>'
+    + `<table><tr><th>職能態度</th><th>分數</th></tr>${rowsOf(bankFor('計時', 'attitude'), n.attitude)}</table>`
+    + `<table style="margin-top:6px"><tr><th>職能表現</th><th>分數</th></tr>${rowsOf(bankFor('計時', 'perf'), n.performance)}</table></details>`;
+  const card = '<div class="card"><b>🌱 入職考核</b>　<span class="muted">到職滿一個月，由店長考核一次</span>'
+    + `<div class="muted" style="margin:6px 0">到職日 ${escapeHtml(n.hireDate || '—')}　·　考核日期 ${fmtLocalDate(n.time)}　·　考核者 ${escapeHtml(n.rater || '—')}</div>`
+    + '<table><tr><th>職能態度</th><th>職能表現</th><th>總分</th></tr>'
+    + `<tr><td>${numText(sc.attitude)} / 30</td><td>${numText(sc.performance)} / 70</td><td><b>${numText(sc.total)}</b> / 100</td></tr></table>`
+    + detail + '</div>';
+  return card + (showWage && data.role === '計時' ? wageBlock(sc.total) : '');
+}
+
 async function renderScores() {
   const pane = document.getElementById('scorePane');
   pane.innerHTML = '<p class="muted">載入中…</p>';
@@ -687,7 +708,12 @@ async function renderScores() {
   );
 
   if (!quarters.length) {
-    pane.innerHTML = `${pendingNote}${msgBlock}<div class="msg">目前尚無可查詢的成績。</div>`;
+    // 剛到職的新人：還沒有任何一季成績，但可能已經有入職考核
+    const nb0 = newbieResultBlock(data, true);
+    const hint = nb0
+      ? '目前還沒有你的季評鑑成績，第一次全員互評結束後就會出現在這裡。'
+      : '目前尚無可查詢的成績。';
+    pane.innerHTML = `${pendingNote}${msgBlock}${nb0}<div class="msg">${hint}</div>`;
     return;
   }
 
@@ -750,9 +776,166 @@ async function renderScores() {
       + `<div class="muted" style="font-size:.8em;margin-top:6px">選擇要查看的季度，下方細項${data.role === '計時' ? '、時薪落點' : '、考核等第'}會跟著切換。</div></div>`;
   }
 
-  pane.innerHTML = pendingNote + msgBlock + table + selector + `<div id="qDetail">${detailFor(curQ)}</div>`;
+  const nbBlock = newbieResultBlock(data, false); // 有季成績時，時薪落點以季度那張為準
+  pane.innerHTML = pendingNote + msgBlock + nbBlock + table + selector + `<div id="qDetail">${detailFor(curQ)}</div>`;
   const qSel = document.getElementById('qSelect');
   if (qSel) qSel.onchange = () => { document.getElementById('qDetail').innerHTML = detailFor(qSel.value); };
+}
+
+// ===== 新人入職考核（只有店長看得到這個分頁）=====
+// 不受每季 1~5 號的填寫窗限制——新人到職滿月不會剛好落在那五天。
+function fmtLocalDate(d) {
+  if (!d) return '—';
+  const x = d instanceof Date ? d : new Date(d);
+  return `${x.getFullYear()}/${x.getMonth() + 1}/${x.getDate()}`;
+}
+function newbieDraftKey(name) { return `mala-eval-draft:${state.auth.account}:newbie:${name}`; }
+function loadNewbieDraft(name) {
+  try { return JSON.parse(localStorage.getItem(newbieDraftKey(name)) || 'null'); } catch { return null; }
+}
+function newbieCard(person) {
+  const attItems = bankFor('計時', 'attitude');
+  const perfItems = bankFor('計時', 'perf');
+  const draft = loadNewbieDraft(person.name) || {};
+  const entry = {
+    attitude: attItems.map((_, i) => (draft.attitude || [])[i] || 0),
+    performance: perfItems.map((_, i) => (draft.performance || [])[i] || 0),
+  };
+  const save = () => { try { localStorage.setItem(newbieDraftKey(person.name), JSON.stringify(entry)); } catch (e) {} };
+
+  const card = document.createElement('details');
+  card.className = 'ratee';
+  card.open = true;
+  const sum = document.createElement('summary');
+  sum.textContent = `${person.name}（${person.role}）`;
+  card.appendChild(sum);
+
+  const info = document.createElement('div');
+  info.className = 'muted';
+  info.style.margin = '4px 0 10px';
+  const lateTxt = person.late
+    ? `<b style="color:#d21f0f">已逾期 ${person.overdueDays} 天，請盡快完成</b>`
+    : (person.overdueDays === 0 ? '<b>今天到期</b>' : `到期後第 ${person.overdueDays} 天`);
+  info.innerHTML = `到職日 ${person.hireDate}　·　滿一個月 ${fmtLocalDate(person.dueOn)}　·　${lateTxt}`;
+  card.appendChild(info);
+  if (draft.attitude || draft.performance) {
+    const note = document.createElement('div');
+    note.className = 'msg';
+    note.textContent = '📝 已自動還原你上次未送出的填寫進度';
+    card.appendChild(note);
+  }
+  card.appendChild(catBlock('職能態度（6 題，滿分 30）', attItems, entry.attitude, true, save));
+  card.appendChild(catBlock('職能表現（14 題，滿分 70）', perfItems, entry.performance, false, save));
+
+  const btn = document.createElement('button');
+  btn.textContent = `送出「${person.name}」的入職考核`;
+  btn.style.marginTop = '10px';
+  const msg = document.createElement('div');
+  msg.className = 'msg';
+  msg.style.display = 'none';
+  const say = (cls, text) => { msg.className = `msg ${cls}`; msg.textContent = text; msg.style.display = 'block'; };
+  btn.onclick = async () => {
+    if (entry.attitude.some((v) => !v) || entry.performance.some((v) => !v)) {
+      say('err', '還有題目沒評到，兩個區塊的每一題都要點星星才能送出。');
+      return;
+    }
+    const sc = newbieScore(entry.attitude, entry.performance);
+    const yes = await askConfirm(
+      `<b>${escapeHtml(person.name)}</b> 的入職考核<br><br>`
+      + `職能態度 <b>${sc.attitude}</b> / 30　　職能表現 <b>${sc.performance}</b> / 70<br>`
+      + `總分 <b>${sc.total}</b> / 100<br><br>`
+      + '送出後<b>不能修改或重填</b>，確定要送出嗎？');
+    if (!yes) return;
+    btn.disabled = true;
+    const label = btn.textContent;
+    btn.textContent = '送出中…';
+    try {
+      const res = await submitNewbie({
+        type: 'newbieSubmit',
+        account: state.auth.account, password: state.auth.password,
+        ratee: person.name, attitude: entry.attitude, performance: entry.performance,
+      });
+      if (res && res.ok) {
+        try { localStorage.removeItem(newbieDraftKey(person.name)); } catch (e) {}
+        renderNewbie();
+        return;
+      }
+      const why = {
+        duplicate: '這位同仁的入職考核已經有人送出過了，不能重複送。',
+        forbidden: '只有店長可以填新人入職考核。',
+        unauthorized: '登入狀態失效，請重新登入後再試。',
+        incomplete: '每一題都要評分（1～5 星）才能送出。',
+        demo: '🔒 示範模式：不會實際儲存。',
+      }[res && res.reason] || '送出失敗，請稍後再試。';
+      say('err', why);
+    } catch (e) {
+      say('err', '連線失敗，請稍後再試。');
+    }
+    btn.disabled = false;
+    btn.textContent = label;
+  };
+  card.append(btn, msg);
+  return card;
+}
+async function renderNewbie() {
+  const pane = document.getElementById('newbiePane');
+  pane.innerHTML = '<p class="muted">載入中…</p>';
+  let data;
+  try { data = await fetchNewbieList(state.auth.account, state.auth.password); }
+  catch (e) { pane.innerHTML = '<div class="msg err">載入失敗，請稍後再試</div>'; return; }
+  if (!data || !data.ok) {
+    pane.innerHTML = data && data.reason === 'forbidden'
+      ? '<div class="msg err">只有店長可以使用新人入職考核。</div>'
+      : '<div class="msg err">無法讀取新人名單，請稍後再試。</div>';
+    return;
+  }
+  const doneNames = (data.done || []).map((d) => d.ratee);
+  const due = pendingList(data.accounts, doneNames);
+  const waiting = (data.accounts || [])
+    .map((a) => ({ ...a, ...newbieStatus({ hireDate: a.hireDate, done: doneNames.includes(a.name) }) }))
+    .filter((a) => a.state === 'waiting')
+    .sort((a, b) => a.daysLeft - b.daysLeft);
+
+  pane.innerHTML = '';
+  const head = document.createElement('div');
+  head.className = 'card';
+  head.innerHTML = '<b>🌱 新人入職考核</b><div class="muted" style="margin-top:6px">'
+    + '新進同仁到職滿一個月時，由你單獨考核一次，題目跟計時同仁的季考核一樣（態度 6 題＋表現 14 題，滿分 100）。'
+    + '這一筆只做一次，之後他就跟大家一起參加每季評鑑。<br>'
+    + '名單依「帳號」分頁的到職日自動出現，填完就會從待辦消失。</div>';
+  pane.appendChild(head);
+
+  if (due.length) {
+    const sec = document.createElement('div');
+    sec.className = 'group'; // 與互評畫面同一種區塊樣式
+    const h = document.createElement('h2');
+    h.textContent = `待考核（${due.length}）`;
+    sec.appendChild(h);
+    due.forEach((person) => sec.appendChild(newbieCard(person)));
+    pane.appendChild(sec);
+  } else {
+    const none = document.createElement('div');
+    none.className = 'msg';
+    none.textContent = '目前沒有需要考核的新人。';
+    pane.appendChild(none);
+  }
+
+  if (waiting.length) {
+    const box = document.createElement('div');
+    box.className = 'card';
+    box.innerHTML = '<b>⏳ 還沒滿一個月</b><table><tr><th>姓名</th><th>到職日</th><th>滿一個月</th><th>還有幾天</th></tr>'
+      + waiting.map((w) => `<tr><td>${escapeHtml(w.name)}（${escapeHtml(w.role)}）</td><td>${escapeHtml(w.hireDate)}</td><td>${fmtLocalDate(w.dueOn)}</td><td>${w.daysLeft} 天</td></tr>`).join('')
+      + '</table>';
+    pane.appendChild(box);
+  }
+  if (data.done && data.done.length) {
+    const box = document.createElement('div');
+    box.className = 'card';
+    box.innerHTML = `<details><summary class="muted" style="cursor:pointer">已完成的入職考核（${data.done.length}）</summary><table><tr><th>姓名</th><th>考核者</th><th>考核日期</th></tr>`
+      + data.done.map((d) => `<tr><td>${escapeHtml(d.ratee)}</td><td>${escapeHtml(d.rater)}</td><td>${fmtLocalDate(d.time)}</td></tr>`).join('')
+      + '</table></details>';
+    pane.appendChild(box);
+  }
 }
 
 // ===== 分頁切換 =====
@@ -760,10 +943,13 @@ function switchTab(which) {
   document.getElementById('fillPane').style.display = which === 'fill' ? '' : 'none';
   document.getElementById('selfPane').style.display = which === 'self' ? '' : 'none';
   document.getElementById('scorePane').style.display = which === 'scores' ? '' : 'none';
+  document.getElementById('newbiePane').style.display = which === 'newbie' ? '' : 'none';
   document.getElementById('btnFill').classList.toggle('active', which === 'fill');
   document.getElementById('btnSelf').classList.toggle('active', which === 'self');
   document.getElementById('btnMyScores').classList.toggle('active', which === 'scores');
+  document.getElementById('btnNewbie').classList.toggle('active', which === 'newbie');
   if (which === 'scores') renderScores();
+  if (which === 'newbie') renderNewbie();
 }
 
 async function init() {
@@ -821,6 +1007,8 @@ document.getElementById('loginBtn').onclick = async () => {
     renderIntro();
     renderFill();
     renderSelf();
+    // 店長才看得到「新人考核」分頁（依「正職職稱」分頁的職稱判斷）
+    document.getElementById('btnNewbie').style.display = res.isManager ? '' : 'none';
     switchTab('fill');
     // 本季已送出過互評 → 收起表格、鎖送出鈕，說明原因
     if (res.alreadyDone && state.fillQuarter) {
@@ -837,6 +1025,7 @@ document.getElementById('loginBtn').onclick = async () => {
 document.getElementById('btnFill').onclick = () => switchTab('fill');
 document.getElementById('btnSelf').onclick = () => switchTab('self');
 document.getElementById('btnMyScores').onclick = () => switchTab('scores');
+document.getElementById('btnNewbie').onclick = () => switchTab('newbie');
 document.getElementById('addPeerMsg').onclick = () => addPeerRow();
 document.getElementById('btnLogout').onclick = () => window.location.reload(); // 回登入頁
 
