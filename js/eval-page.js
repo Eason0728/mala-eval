@@ -134,6 +134,7 @@ function renderStars(values, idx, item, onSave) {
   if (values[idx]) [...stars.children].forEach((el, i) => el.classList.toggle('on', i < values[idx]));
   const help = document.createElement('details');
   help.className = 'help';
+  help.open = true; // 星等說明預設展開（2026-10-02 Eason 指定），想收起來仍可點標題
   help.innerHTML = '<summary class="muted">星等說明</summary>'
     + item.levels.map((lv, i) => `<div>${5 - i}★ ${lv}</div>`).join('');
   wrap.append(title, stars, help);
@@ -167,6 +168,7 @@ function previewItemEl(idx, item) {
   title.textContent = `${idx + 1}. ${item.label}`;
   const help = document.createElement('details');
   help.className = 'help';
+  help.open = true; // 星等說明預設展開（2026-10-02 Eason 指定），想收起來仍可點標題
   help.innerHTML = '<summary class="muted">星等說明</summary>'
     + item.levels.map((lv, i) => `<div>${5 - i}★ ${lv}</div>`).join('');
   wrap.append(title, help);
