@@ -12,6 +12,11 @@ function ftItemsFor(ratee) {
   const items = (DATA.ftTemplates || {})[title] || [];
   return { title, items };
 }
+// 畫面顯示用的角色：正職有填職稱就顯示「正職・店長」（只影響顯示，計分仍看 role）
+function roleLabel(ratee, role) {
+  const title = role === '正職' ? String((DATA.ftTitles || {})[ratee] || '').trim() : '';
+  return title ? `${role}・${title}` : role;
+}
 // 該正職本季的評分 { sel:{key:等級}, actual:{key:實際值} }
 function ftPerfFor(ratee) {
   const sp = (DATA.supervisorPerf || []).find((s) => s.ratee === ratee);
@@ -353,7 +358,7 @@ function renderOverview(rows) {
   const head = '<tr><th>同仁</th><th>角色</th><th>態度分（30分）</th><th>態度±</th><th>表現分（70分）</th><th>表現±</th><th>總分（100分）</th><th>實際分數</th><th>態度份數</th><th>表現份數</th></tr>';
   const body = rows.map((r) => `<tr>
     <td><a href="#" data-r="${r.ratee}">${r.ratee}</a></td>
-    <td>${r.role}</td>
+    <td>${esc(roleLabel(r.ratee, r.role))}</td>
     <td>${numText(r.attitude)}</td><td>${r.attitudeAdjust}</td>
     <td>${r.performanceCounted || r.performance !== null ? numText(r.performance) : '未計'}</td><td>${r.performanceAdjust}</td>
     <td>${totalText(r)}</td>
@@ -466,7 +471,7 @@ function renderDetail(ratee) {
     ? `<div class="muted">自評：態度 ${selfAttVal}｜表現 ${selfPerf ? round1(raterTotal(selfPerf.scores)) : '—'}（已含進上方實際分數）</div>`
     : '<div class="muted">自評：尚未填</div>';
   document.getElementById('detail').innerHTML = `
-    <b>${ratee}（${row.role}） 明細</b>
+    <b>${ratee}（${esc(roleLabel(ratee, row.role))}） 明細</b>
     <div>態度分 ${numText(row.attitude)}｜表現分 ${row.performance === null ? '未計' : numText(row.performance)}｜實際分數 ${numText(row.finalScore)}</div>
     ${selfLine}
     ${newbieDetailHtml(ratee)}
