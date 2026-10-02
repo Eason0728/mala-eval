@@ -108,7 +108,7 @@
       if (!acc) return { ok: false, reason: 'unauthorized' };
       var st = load(); var q = currentQuarter();
       if (alreadySelf(st, q, acc.name)) return { ok: false, reason: 'duplicate' };
-      st.self.push({ quarter: q, person: acc.name, role: acc.role, attitude: p.attitude, performance: p.performance });
+      st.self.push({ quarter: q, person: acc.name, role: acc.role, attitude: p.attitude, performance: p.performance, attitudeLabels: p.attitudeLabels || [], performanceLabels: p.performanceLabels || [] });
       if (p.selfNote) st.selfMsgs.push({ quarter: q, from: acc.name, kind: '自己', to: acc.name, msg: p.selfNote, anon: false });
       if (p.companyNote) st.selfMsgs.push({ quarter: q, from: acc.name, kind: '公司', to: '', msg: p.companyNote, anon: true });
       (p.peerMessages || []).forEach(function (m) {
@@ -224,7 +224,7 @@
       if (st.newbie.some(function (r) { return r.ratee === p.ratee; })) return { ok: false, reason: 'duplicate' };
       var bad = function (v) { return !(Number(v) >= 1 && Number(v) <= 5); };
       if (!p.attitude.length || !p.performance.length || p.attitude.some(bad) || p.performance.some(bad)) return { ok: false, reason: 'incomplete' };
-      st.newbie.push({ time: new Date().toISOString(), ratee: p.ratee, hireDate: target.hireDate, rater: acc.name, attitude: p.attitude, performance: p.performance });
+      st.newbie.push({ time: new Date().toISOString(), ratee: p.ratee, hireDate: target.hireDate, rater: acc.name, attitude: p.attitude, performance: p.performance, attitudeLabels: p.attitudeLabels || [], performanceLabels: p.performanceLabels || [] });
       save(st); return { ok: true };
     },
   };

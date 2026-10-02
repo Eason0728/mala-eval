@@ -162,7 +162,7 @@ function publicConfig() {
   const hit = cache.get('publicConfig');
   if (hit) return JSON.parse(hit);
   const cfg = {
-    ver: 18, // 部署版本標記（18：登入回應加 alreadySelfDone，自評也鎖已送出）
+    ver: 19, // 部署版本標記（19：新人考核送出時鎖定題目文字，題庫改了也不會對錯題）
     quarter: currentQuarter(),
     accounts: readAccounts().map((a) => ({ name: a.name, role: a.role })),
     banks: {
@@ -196,7 +196,18 @@ function isVisitor(p) { return String(p.account) === 'test' && String(p.password
 // ====== 新人入職考核（2026-09-03）======
 // 新進同仁到職滿一個月，由「店長」單獨考核一次，題目與計時同仁相同（態度30＋表現70）。
 // 一人只做一次，做完就照常參加每季全員互評。分數計算一律在前端（js/newbie.js），這裡只存取。
-var NEWBIE_HEADER = ['時間', '受評者', '到職日', '評核者', '態度JSON', '表現JSON'];
+var NEWBIE_HEADER = ['時間', '受評者', '到職日', '評核者', '態度JSON', '表現JSON', '態度題目JSON', '表現題目JSON'];
+// 題目鎖定（2026-10-02）：分數只記「第幾題幾顆星」，題庫一改，舊考核就會對錯題。
+// 所以送出時把當下的題目文字一起存進 G／H 欄，之後一律照存下來的題目顯示，不再跟著題庫變。
+// 鎖定功能上線前送出的舊考核（G／H 空白），是用 2026-10-02 改題目「之前」的題庫評的，
+// 第一次讀到時補寫下面這份舊題目進去（只補一次，之後就以試算表為準）。
+var NEWBIE_LEGACY_ATT = ['工作效率與品質', '與客人互動狀況', '團隊合作與溝通能力', '公司規定遵守度與紀律性', '學習與主動性', '出勤與守時狀況'];
+var NEWBIE_LEGACY_PERF = ['配菜添加準確率', '打包外帶準確率', '攤車蔬菜品項包裝速度', '攤車鍋料品項包裝速度', '炸燙套包裝速度',
+  '飲料調製跟封裝', '拉飯與煮飯', '洗滌區主動性', '收班清潔速度', '攤車補料積極性', '食材前置作業', '協助燙炸',
+  '自助吧和內用區協助', '櫃檯點餐'];
+function parseLabels(v) {
+  try { const a = JSON.parse(v || '[]'); return Array.isArray(a) ? a.map(String) : []; } catch (e) { return []; }
+}
 function newbieSheet() {
   let sh = ss().getSheetByName('新人考核');
   if (!sh) {
@@ -210,7 +221,10 @@ function newbieSheet() {
 function readNewbie() {
   const sh = newbieSheet();
   if (!sh) return [];
-  const v = sh.getDataRange().getValues();
+  if (sh.getLastColumn() < NEWBIE_HEADER.length) { // 舊分頁只有 6 欄：補上 G／H 表頭
+    sh.getRange(1, 1, 1, NEWBIE_HEADER.length).setValues([NEWBIE_HEADER]);
+  }
+  const v = sh.getRange(1, 1, Math.max(sh.getLastRow(), 1), NEWBIE_HEADER.length).getValues();
   const out = [];
   for (let i = 1; i < v.length; i++) {
     if (!v[i][1]) continue;
@@ -218,9 +232,17 @@ function readNewbie() {
     var perf = [];
     try { att = JSON.parse(v[i][4] || '[]'); } catch (e) { att = []; }
     try { perf = JSON.parse(v[i][5] || '[]'); } catch (e) { perf = []; }
+    var attLabels = parseLabels(v[i][6]);
+    var perfLabels = parseLabels(v[i][7]);
+    if (!attLabels.length && !perfLabels.length) { // 鎖定前的舊考核 → 補寫舊題目（只補這一次）
+      attLabels = NEWBIE_LEGACY_ATT.slice(0, att.length);
+      perfLabels = NEWBIE_LEGACY_PERF.slice(0, perf.length);
+      try { sh.getRange(i + 1, 7, 1, 2).setValues([[JSON.stringify(attLabels), JSON.stringify(perfLabels)]]); } catch (e) {}
+    }
     out.push({
       time: v[i][0], ratee: String(v[i][1]), hireDate: fmtDate(v[i][2]),
       rater: String(v[i][3]), attitude: att, performance: perf,
+      attitudeLabels: attLabels, performanceLabels: perfLabels,
     });
   }
   return out;
@@ -256,8 +278,15 @@ function handleNewbieSubmit(p) {
   const att = Array.isArray(p.attitude) ? p.attitude : [];
   const perf = Array.isArray(p.performance) ? p.performance : [];
   if (!att.length || !perf.length || att.some(bad) || perf.some(bad)) return { ok: false, reason: 'incomplete' };
-  newbieSheet().appendRow([
+  // 題目文字：以店長當下畫面上看到的為準（前端送來、題數要對得上）；沒送或對不上就用目前題庫。
+  const labelsOf = (sent, bankName, n) => {
+    const a = Array.isArray(sent) ? sent.map(String) : [];
+    return a.length === n ? a : readBank(bankName).map((it) => String(it.label)).slice(0, n);
+  };
+  newbieSheet().appendRow([  // 上面重複檢查的 readNewbie() 已把表頭擴成 8 欄
     new Date(), ratee, target.hireDate, acc.name, JSON.stringify(att), JSON.stringify(perf),
+    JSON.stringify(labelsOf(p.attitudeLabels, 'CFG_pt_attitude', att.length)),
+    JSON.stringify(labelsOf(p.performanceLabels, 'CFG_pt_perf', perf.length)),
   ]);
   return { ok: true };
 }

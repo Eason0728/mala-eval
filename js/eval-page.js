@@ -631,6 +631,11 @@ function wageBlock(myScore) {
   return `<div class="card"><b>💰 分數落點時薪對照</b><table><tr><th>實際分數</th><th>時薪</th></tr>${rows}</table></div>`;
 }
 
+// 入職考核送出時已鎖定題目文字（後端 G／H 欄）；有就照鎖定的顯示，舊資料沒有才退回目前題庫。
+function lockedItems(labels, bank) {
+  return Array.isArray(labels) && labels.length ? labels.map((label) => ({ label })) : (bank || []);
+}
+
 // 入職考核結果卡（新人才有；showWage＝還沒有任何季成績時，順便顯示時薪落點）
 function newbieResultBlock(data, showWage) {
   const n = data && data.newbie;
@@ -641,8 +646,8 @@ function newbieResultBlock(data, showWage) {
     return `<tr><td>${escapeHtml(it.label)}</td><td>${v === undefined || v === null ? '—' : v}</td></tr>`;
   }).join('');
   const detail = '<details style="margin-top:8px"><summary class="muted" style="cursor:pointer">看每一題的分數</summary>'
-    + `<table><tr><th>職能態度</th><th>分數</th></tr>${rowsOf(bankFor('計時', 'attitude'), n.attitude)}</table>`
-    + `<table style="margin-top:6px"><tr><th>職能表現</th><th>分數</th></tr>${rowsOf(bankFor('計時', 'perf'), n.performance)}</table></details>`;
+    + `<table><tr><th>職能態度</th><th>分數</th></tr>${rowsOf(lockedItems(n.attitudeLabels, bankFor('計時', 'attitude')), n.attitude)}</table>`
+    + `<table style="margin-top:6px"><tr><th>職能表現</th><th>分數</th></tr>${rowsOf(lockedItems(n.performanceLabels, bankFor('計時', 'perf')), n.performance)}</table></details>`;
   const card = '<div class="card"><b>🌱 入職考核</b>　<span class="muted">到職滿一個月，由店長考核一次</span>'
     + `<div class="muted" style="margin:6px 0">到職日 ${escapeHtml(n.hireDate || '—')}　·　考核日期 ${fmtLocalDate(n.time)}　·　考核者 ${escapeHtml(n.rater || '—')}</div>`
     + '<table><tr><th>職能態度</th><th>職能表現</th><th>總分</th></tr>'
@@ -853,6 +858,9 @@ function newbieCard(person) {
         type: 'newbieSubmit',
         account: state.auth.account, password: state.auth.password,
         ratee: person.name, attitude: entry.attitude, performance: entry.performance,
+        // 連同店長畫面上看到的題目一起送，後端存下來鎖定，日後改題庫也不會對錯題
+        attitudeLabels: bankFor('計時', 'attitude').map((it) => it.label),
+        performanceLabels: bankFor('計時', 'perf').map((it) => it.label),
       });
       if (res && res.ok) {
         try { localStorage.removeItem(newbieDraftKey(person.name)); } catch (e) {}

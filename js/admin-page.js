@@ -412,6 +412,8 @@ function newbieDetailHtml(ratee) {
   if (!n) return '';
   const sc = newbieScore(n.attitude || [], n.performance || []);
   const banks = (DATA.config && DATA.config.banks) || {};
+  // 送出時鎖定的題目文字優先；舊資料沒有才退回目前題庫
+  const locked = (labels, bank) => (Array.isArray(labels) && labels.length ? labels.map((label) => ({ label })) : bank);
   const rowsOf = (bank, scores) => (bank || []).map((it, i) => {
     const v = (scores || [])[i];
     return `<tr><td>${esc(it.label)}</td><td>${v === undefined || v === null ? '—' : v}</td></tr>`;
@@ -421,8 +423,8 @@ function newbieDetailHtml(ratee) {
   return `<div class="card"><b>🌱 入職考核</b> <span class="muted">到職 ${esc(n.hireDate || '—')}｜考核者 ${esc(n.rater || '—')}｜${whenTxt}（不列入季分數）</span>
     <div>態度 ${numText(sc.attitude)} / 30｜表現 ${numText(sc.performance)} / 70｜<b>總分 ${numText(sc.total)} / 100</b></div>
     <details style="margin-top:6px"><summary class="muted" style="cursor:pointer">每一題的分數</summary>
-      <table><tr><th>職能態度</th><th>分數</th></tr>${rowsOf(banks.ptAttitude, n.attitude)}</table>
-      <table style="margin-top:6px"><tr><th>職能表現</th><th>分數</th></tr>${rowsOf(banks.ptPerf, n.performance)}</table>
+      <table><tr><th>職能態度</th><th>分數</th></tr>${rowsOf(locked(n.attitudeLabels, banks.ptAttitude), n.attitude)}</table>
+      <table style="margin-top:6px"><tr><th>職能表現</th><th>分數</th></tr>${rowsOf(locked(n.performanceLabels, banks.ptPerf), n.performance)}</table>
     </details></div>`;
 }
 
