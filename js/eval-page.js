@@ -1,4 +1,5 @@
 import { login, fetchConfig, submitPeer, submitSelf, myScores, changePassword, setDemo, setDemoData, isDemo, fetchNewbieList, submitNewbie } from './api.js';
+import { MOVED_TO } from './config.js';
 import { buildDemoData } from './demo.js';
 import { splitPeerSubmission } from './validate.js';
 import { averageItems, round1, kpiItemScore, ftAttitudeScale, gradeFor, GRADE_TABLE, wageTierIndex, capScore } from './scoring.js';
@@ -946,6 +947,22 @@ async function renderNewbie() {
   }
 }
 
+// ===== 搬家後的唯讀模式（2027-01 起；只留「我的成績」）=====
+function enterMovedMode() {
+  ['btnFill', 'btnSelf', 'btnNewbie'].forEach((id) => { const b = document.getElementById(id); if (b) b.style.display = 'none'; });
+  const form = document.getElementById('evalForm');
+  if (form && !document.getElementById('movedBanner')) {
+    const box = document.createElement('div');
+    box.id = 'movedBanner';
+    box.className = 'card';
+    box.innerHTML = `<strong>📦 績效評核已經搬到鼎兆元管理系統</strong><p>從 2027 年 1 月起，每季的互評、自評都在管理系統填寫：<br>`
+      + `<a href="${MOVED_TO}" target="_blank" rel="noopener">${MOVED_TO}</a> → 左側「人資部門 → 績效評核」，用你的 DZY 編號登入。<br>`
+      + `這裡只能查以前的成績，不能再填。</p>`;
+    form.insertBefore(box, form.firstChild);
+  }
+  switchTab('scores');
+}
+
 // ===== 分頁切換 =====
 function switchTab(which) {
   document.getElementById('fillPane').style.display = which === 'fill' ? '' : 'none';
@@ -1019,6 +1036,7 @@ document.getElementById('loginBtn').onclick = async () => {
     document.getElementById('loginGate').style.display = 'none';
     document.getElementById('evalForm').style.display = 'block';
     document.getElementById('hello').textContent = `${res.name}（${res.role}）你好`;
+    if (MOVED_TO) { enterMovedMode(); return; }   // 搬家後：只能看舊成績
     renderIntro();
     renderFill();
     renderSelf();
